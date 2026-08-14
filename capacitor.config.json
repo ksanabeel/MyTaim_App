@@ -1,0 +1,13 @@
+{
+  "appId": "com.bookonmap.app",
+  "appName": "BookOnMap",
+  "webDir": "dist",
+  "server": {
+    "androidScheme": "https"
+  },
+  "plugins": {
+    "Geolocation": {
+      "permissions": ["location"]
+    }
+  }
+}

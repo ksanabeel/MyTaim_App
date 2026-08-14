@@ -1,0 +1,40 @@
+:root {
+  font-family: "Tajawal", "Noto Sans Arabic", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  color: #172033;
+  background: #f4f7fb;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body, #root {
+  width: 100%;
+  min-width: 0;
+  min-height: 100%;
+  overflow-x: hidden;
+}
+
+body {
+  min-height: 100vh;
+  background: #f4f7fb;
+}
+
+button, input, textarea, select { font: inherit; }
+button { -webkit-tap-highlight-color: transparent; }
+
+input, textarea, select {
+  appearance: none;
+  -webkit-appearance: none;
+  color-scheme: light;
+  background-color: #fff;
+  color: #172033;
+  -webkit-text-fill-color: #172033;
+}
+
+input::placeholder, textarea::placeholder { color: #94a3b8; opacity: 1; }
+
+@media (max-width: 768px) {
+  input, textarea, select { font-size: 16px !important; }
+}
