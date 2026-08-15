@@ -2,10 +2,15 @@ workflows:
   ios-app-build:
     name: iOS App Build
     instance_type: mac_mini_m2
+    integrations:
+      app_store_connect: Codemagic
     environment:
       node: 22
       xcode: latest
       cocoapods: default
+      ios_signing:
+        distribution_type: app_store
+        bundle_identifier: com.bookonmap.app
     scripts:
       - name: Install dependencies
         script: npm install
@@ -13,11 +18,16 @@ workflows:
         script: npm run build
       - name: Sync Capacitor
         script: npx cap sync ios
-      - name: Build iOS project (Test Run)
+      - name: Set up code signing settings on Xcode project
+        script: xcode-project use-profiles
+      - name: Build iOS project (Signed for App Store)
         script: |
           xcode-project build-ipa \
             --project "ios/App/App.xcodeproj" \
-            --scheme "App" \
-            --disable-codesign
+            --scheme "App"
     artifacts:
       - build/ios/ipa/*.ipa
+    publishing:
+      app_store_connect:
+        auth: integration
+        submit_to_testflight: true
