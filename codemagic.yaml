@@ -13,6 +13,7 @@ workflows:
         script: npm run build
       - name: Update and Sync Capacitor
         script: |
+          npm install @capacitor/ios
           npx cap add ios || true
           npx cap sync ios
       - name: Build iOS project (Test Run)
