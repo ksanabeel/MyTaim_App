@@ -19,6 +19,9 @@ workflows:
         script: |
           app-store-connect fetch-signing-files "com.bookonmap.app" \
             --type IOS_APP_STORE \
+            --issuer-id "314b845c-2ece-4748-99b7-232bf4d7f49a" \
+            --key-id "FQT53Y62GB" \
+            --private-key "$APP_STORE_CONNECT_PRIVATE_KEY" \
             --create
       - name: Set up Code Signing
         script: xcode-project use-profiles
