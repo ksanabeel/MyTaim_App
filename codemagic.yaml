@@ -12,7 +12,9 @@ workflows:
       - name: Build React web assets
         script: npm run build
       - name: Update and Sync Capacitor
-        script: npx cap sync ios
+        script: |
+          npx cap add ios || true
+          npx cap sync ios
       - name: Build iOS project (Test Run)
         script: |
           xcode-project build-ipa \
