@@ -16,7 +16,7 @@ workflows:
       - name: Build iOS project (Test Run)
         script: |
           xcode-project build-ipa \
-            --workspace "ios/App/App.xcworkspace" \
+            --project "ios/App/App.xcodeproj" \
             --scheme "App" \
             --disable-codesign
     artifacts:
