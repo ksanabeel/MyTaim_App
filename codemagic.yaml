@@ -1,0 +1,23 @@
+workflows:
+  ios-app-build:
+    name: iOS App Build
+    instance_type: mac_mini_m2
+    environment:
+      node: 20
+      xcode: latest
+      cocoapods: default
+    scripts:
+      - name: Install dependencies
+        script: npm install
+      - name: Build React web assets
+        script: npm run build
+      - name: Update and Sync Capacitor
+        script: npx cap sync ios
+      - name: Build iOS project (Test Run)
+        script: |
+          xcode-project build-ipa \
+            --workspace "ios/App/App.xcworkspace" \
+            --scheme "App" \
+            --disable-codesign
+    artifacts:
+      - build/ios/ipa/*.ipa
