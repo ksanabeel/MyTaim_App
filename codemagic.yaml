@@ -16,6 +16,10 @@ workflows:
           npm install @capacitor/ios
           npx cap add ios || true
           npx cap sync ios
+      - name: Install CocoaPods
+        script: |
+          cd ios/App
+          pod install --repo-update
       - name: Build iOS project (Test Run)
         script: |
           xcode-project build-ipa \
