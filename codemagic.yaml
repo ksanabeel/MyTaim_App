@@ -11,10 +11,10 @@ workflows:
         script: npm install
       - name: Build React web assets
         script: npm run build
-      - name: Update and Sync Capacitor
+      - name: Add iOS Platform and Sync
         script: |
           npm install @capacitor/ios
-          npx cap add ios || true
+          npx cap add ios
           npx cap sync ios
       - name: Install CocoaPods
         script: |
