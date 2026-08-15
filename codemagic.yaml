@@ -11,11 +11,8 @@ workflows:
         script: npm install
       - name: Build React web assets
         script: npm run build
-      - name: Sync Capacitor and Pods
-        script: |
-          npx cap sync ios
-          cd ios/App
-          pod install
+      - name: Sync Capacitor
+        script: npx cap sync ios
       - name: Build iOS project (Test Run)
         script: |
           xcode-project build-ipa \
