@@ -2,6 +2,8 @@ workflows:
   ios-app-build:
     name: iOS App Build
     instance_type: mac_mini_m2
+    integrations:
+      app_store_connect: Codemagic
     environment:
       node: 22
       xcode: latest
