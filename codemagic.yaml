@@ -8,6 +8,9 @@ workflows:
       node: 22
       xcode: latest
       cocoapods: default
+      ios_signing:
+        distribution_type: app_store
+        bundle_identifier: com.bookonmap.app
     scripts:
       - name: Install dependencies
         script: npm install
@@ -15,15 +18,6 @@ workflows:
         script: npm run build
       - name: Sync Capacitor
         script: npx cap sync ios
-      - name: Initialize Mac Keychain
-        script: keychain initialize
-      - name: Fetch and Create Apple Certificates
-        script: |
-          app-store-connect fetch-signing-files "com.bookonmap.app" \
-            --type IOS_APP_STORE \
-            --create
-      - name: Set up Code Signing
-        script: xcode-project use-profiles
       - name: Build iOS IPA
         script: |
           xcode-project build-ipa \
