@@ -121,7 +121,7 @@ const Login = () => {
   const handleAppleLogin = async () => {
     try {
       const { response } = await SignInWithApple.authorize({
-        clientId: "com.bookonmap.app",
+        clientId: "com.bookonmap.app.service",
         scopes: "email name",
       });
 
