@@ -81,19 +81,41 @@ const Login = () => {
 
   // ✨ إعداد دائم داخل التطبيق لاستلام الرابط العميق (Deep Link Callback)
   useEffect(() => {
-    const handleUrlOpener = (event) => {
-      if (event.url.includes("com.bookonmap.app://auth-callback")) {
-        const url = new URL(event.url);
-        if (url.hash && url.hash.includes("#access_token")) {
-          console.log("Deep link received, session should create...");
+    let listener;
+
+    const setupListener = async () => {
+      listener = await App.addListener("appUrlOpen", async (event) => {
+        if (event.url.includes("com.bookonmap.app://auth-callback")) {
+          try {
+            const url = new URL(event.url);
+            const hash = url.hash.startsWith("#")
+              ? url.hash.substring(1)
+              : url.hash;
+            const params = new URLSearchParams(hash);
+            const accessToken = params.get("access_token");
+            const refreshToken = params.get("refresh_token");
+
+            if (accessToken) {
+              const { data, error } =
+                await supabase.auth.setSession({
+                  access_token: accessToken,
+                  refresh_token: refreshToken || "",
+                });
+              if (error) {
+                console.error("Session error:", error.message);
+              }
+            }
+          } catch (err) {
+            console.error("Deep link parse error:", err);
+          }
         }
-      }
+      });
     };
 
-    App.addListener("appUrlOpen", handleUrlOpener);
+    setupListener();
 
     return () => {
-      App.removeAllListeners("appUrlOpen");
+      if (listener) listener.remove();
     };
   }, []);
 

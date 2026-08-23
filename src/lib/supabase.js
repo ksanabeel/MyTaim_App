@@ -26,8 +26,8 @@ const storageAdapter = isNative
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
-    flowType: "pkce",
-    detectSessionInUrl: !isNative,
+    flowType: isNative ? "implicit" : "pkce",
+    detectSessionInUrl: true,
     ...(storageAdapter ? { storage: storageAdapter } : {}),
   },
 });
