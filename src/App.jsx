@@ -341,6 +341,15 @@ function MainAppContent() {
   }, []);
 
   useEffect(() => {
+    const hash = window.location.hash;
+    const search = window.location.search;
+    const hasRecoveryInUrl =
+      (hash && (hash.includes("type=recovery") || hash.includes("access_token"))) ||
+      (search && (search.includes("type=recovery") || search.includes("access_token")));
+    if (hasRecoveryInUrl) {
+      setShowUpdatePassword(true);
+    }
+
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
       fetchAllData(session?.user?.id);
