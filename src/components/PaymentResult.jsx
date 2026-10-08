@@ -1,22 +1,23 @@
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState, useCallback, useRef } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import { supabase } from "../lib/supabase";
 
 const PROCESSING = "processing";
 const SUCCESS = "success";
 const FAILED = "failed";
-const UNPAID = "unpaid";
 
 export default function PaymentResult() {
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
 
-  const paymentId = searchParams.get("id");
-  const status = searchParams.get("status");
-  const message = searchParams.get("message");
-  const bookingId = searchParams.get("booking_id");
+  const initialStatus = useRef(searchParams.get("status")).current;
+  const paymentId = useRef(searchParams.get("id")).current;
+  const message = useRef(searchParams.get("message")).current;
+  const bookingId = useRef(searchParams.get("booking_id")).current;
 
-  const [updateState, setUpdateState] = useState(PROCESSING);
+  const [paymentState, setPaymentState] = useState(
+    initialStatus === "failed" ? FAILED : PROCESSING,
+  );
   const [updateMessage, setUpdateMessage] = useState("");
 
   const refreshAppData = useCallback(() => {
@@ -28,8 +29,7 @@ export default function PaymentResult() {
   }, []);
 
   useEffect(() => {
-    if (status !== "paid") {
-      setUpdateState(UNPAID);
+    if (initialStatus !== "paid") {
       return;
     }
 
@@ -62,7 +62,7 @@ export default function PaymentResult() {
 
         if (error) throw error;
 
-        setUpdateState(SUCCESS);
+        setPaymentState(SUCCESS);
         refreshAppData();
 
         const cleanUrl = window.location.pathname;
@@ -76,7 +76,7 @@ export default function PaymentResult() {
           details: error?.details,
           hint: error?.hint,
         });
-        setUpdateState(FAILED);
+        setPaymentState(FAILED);
         setUpdateMessage("تعذّر تحديث حالة العمولة تلقائياً. يرجى التواصل مع الدعم.");
       }
     };
@@ -86,12 +86,12 @@ export default function PaymentResult() {
     return () => {
       cancelled = true;
     };
-  }, [status, bookingId, refreshAppData, setSearchParams]);
+  }, [initialStatus, bookingId, refreshAppData, setSearchParams]);
 
   const renderUpdateStatus = () => {
-    if (status !== "paid") return null;
+    if (initialStatus !== "paid") return null;
 
-    if (updateState === PROCESSING) {
+    if (paymentState === PROCESSING) {
       return (
         <div
           style={{
@@ -109,7 +109,7 @@ export default function PaymentResult() {
       );
     }
 
-    if (updateState === SUCCESS) {
+    if (paymentState === SUCCESS) {
       return (
         <div
           style={{
@@ -127,7 +127,7 @@ export default function PaymentResult() {
       );
     }
 
-    if (updateState === FAILED) {
+    if (paymentState === FAILED) {
       return (
         <div
           style={{
@@ -161,7 +161,7 @@ export default function PaymentResult() {
         direction: "rtl",
       }}
     >
-      {status === "paid" ? (
+      {initialStatus === "paid" ? (
         <>
           <div style={{ fontSize: "4rem", marginBottom: "20px" }}>✅</div>
           <h2 style={{ color: "#16a34a", marginBottom: "10px" }}>
@@ -186,7 +186,7 @@ export default function PaymentResult() {
           )}
           {renderUpdateStatus()}
         </>
-      ) : (
+      ) : initialStatus === "failed" ? (
         <>
           <div style={{ fontSize: "4rem", marginBottom: "20px" }}>❌</div>
           <h2 style={{ color: "#dc2626", marginBottom: "10px" }}>
@@ -195,6 +195,13 @@ export default function PaymentResult() {
           <p style={{ color: "#475569", fontSize: "1.1rem" }}>
             السبب: {message || "تم رفض العملية من قبل البنك"}
           </p>
+        </>
+      ) : (
+        <>
+          <div style={{ fontSize: "4rem", marginBottom: "20px" }}>⏳</div>
+          <h2 style={{ color: "#1e40af", marginBottom: "10px" }}>
+            جارٍ التحقق من عملية الدفع
+          </h2>
         </>
       )}
 
