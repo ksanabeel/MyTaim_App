@@ -22,6 +22,11 @@ const Login = () => {
 
   const [loading, setLoading] = useState(false);
   const [authError, setAuthError] = useState("");
+  const [formNotice, setFormNotice] = useState("");
+  const [formNoticeType, setFormNoticeType] = useState("");
+  const [resetNotice, setResetNotice] = useState("");
+  const [resetNoticeType, setResetNoticeType] = useState("");
+  const [resetSending, setResetSending] = useState(false);
   const [resendEmail, setResendEmail] = useState("");
   const [resendMessage, setResendMessage] = useState("");
   const [resendMessageType, setResendMessageType] = useState("");
@@ -194,6 +199,8 @@ const Login = () => {
   const handleEmailAuth = async (e) => {
     e.preventDefault();
     setAuthError("");
+    setFormNotice("");
+    setFormNoticeType("");
     setResendMessage("");
     setResendMessageType("");
     setLoading(true);
@@ -218,13 +225,14 @@ const Login = () => {
                 : "Your email address is not confirmed. You can resend the confirmation link.",
             );
           } else {
-            alert("حدث خطأ: " + error.message);
+            setAuthError(error.message);
           }
           return;
         }
       } else if (authMode === "email_signup") {
         if (!fullName.trim()) {
-          alert("الرجاء إدخال الاسم الكامل");
+          setFormNotice("الرجاء إدخال الاسم الكامل");
+          setFormNoticeType("error");
           setLoading(false);
           return;
         }
@@ -233,7 +241,8 @@ const Login = () => {
           return;
         }
         if (!phone.trim()) {
-          alert("الرجاء إدخال رقم الجوال");
+          setFormNotice("الرجاء إدخال رقم الجوال");
+          setFormNoticeType("error");
           setLoading(false);
           return;
         }
@@ -269,7 +278,12 @@ const Login = () => {
         });
 
         if (error) throw error;
-        alert("✅ تم إنشاء الحساب بنجاح! يمكنك الآن تسجيل الدخول.");
+        setFormNotice(
+          isRTL
+            ? "✅ تم إنشاء الحساب بنجاح! يمكنك الآن تسجيل الدخول."
+            : "✅ Account created successfully! You can now log in.",
+        );
+        setFormNoticeType("success");
         setAuthMode("email_login");
         setPassword("");
         setUsername("");
@@ -279,51 +293,110 @@ const Login = () => {
         setReferrerCode("");
       }
     } catch (error) {
-      alert("حدث خطأ: " + error.message);
+      setFormNotice(
+        isRTL
+          ? "حدث خطأ: " + error.message
+          : "An error occurred: " + error.message,
+      );
+      setFormNoticeType("error");
     } finally {
       setLoading(false);
     }
   };
 
   const handleResetPassword = async () => {
+    setResetNotice("");
+    setResetNoticeType("");
+
     let resetEmail = "";
     if (identifier && identifier.includes("@")) {
       resetEmail = identifier;
     } else if (identifier) {
-      setLoading(true);
+      setResetSending(true);
       try {
         resetEmail = await resolveLoginEmail(identifier);
       } catch (_err) {
-        alert("تعذّر العثور على البريد المرتبط بهذا الحساب. يرجى إدخال البريد الإلكتروني مباشرة.");
-        setLoading(false);
+        setResetNotice(
+          isRTL
+            ? "تعذّر العثور على البريد المرتبط بهذا الحساب. يرجى إدخال البريد الإلكتروني مباشرة."
+            : "Could not find the email associated with this account. Please enter your email directly.",
+        );
+        setResetNoticeType("error");
+        setResetSending(false);
         return;
       } finally {
-        setLoading(false);
+        setResetSending(false);
       }
     }
     if (!resetEmail) {
-      alert("الرجاء إدخال بريدك الإلكتروني أو رقم الجوال في الحقل المخصص أولاً.");
+      setResetNotice(
+        isRTL
+          ? "الرجاء إدخال بريدك الإلكتروني أو رقم الجوال في الحقل المخصص أولاً."
+          : "Please enter your email or phone number in the field above first.",
+      );
+      setResetNoticeType("error");
       return;
     }
-    setLoading(true);
+    setResetSending(true);
     try {
       const { error } = await supabase.auth.resetPasswordForEmail(resetEmail, {
         redirectTo: window.location.origin,
       });
       if (error) throw error;
-      alert(
-        "تم إرسال رابط استعادة كلمة المرور إلى إيميلك! (شيك صندوق الوارد أو البريد المزعج Spam).",
+      setResetNotice(
+        isRTL
+          ? "تم إرسال رابط استعادة كلمة المرور إلى إيميلك! يرجى مراجعة صندوق الوارد والبريد غير الهام (Spam)."
+          : "A password recovery link has been sent to your email! Please check your inbox and spam folder.",
       );
+      setResetNoticeType("success");
     } catch (err) {
-      alert("حدث خطأ: " + err.message);
+      const errStatus = err.status || err.statusCode || 0;
+      const errText = `${errStatus} ${err.message || ""}`.toLowerCase();
+      const isServerError =
+        errStatus === 500 ||
+        errText.includes("500") ||
+        errText.includes("smtp") ||
+        errText.includes("recovery email");
+
+      setResetNotice(
+        isServerError
+          ? isRTL
+            ? "تعذر إرسال البريد حالياً، يرجى التحقق من إعدادات البريد أو المحاولة لاحقاً."
+            : "We could not send the email right now. Please check your email settings or try again later."
+          : isRTL
+          ? "حدث خطأ: " + err.message
+          : "An error occurred: " + err.message,
+      );
+      setResetNoticeType("error");
     } finally {
-      setLoading(false);
+      setResetSending(false);
     }
   };
 
   const renderFormContent = () => {
     return (
       <form onSubmit={handleEmailAuth} style={styles.form}>
+        {formNotice && (
+          <div
+            style={{
+              padding: "12px",
+              borderRadius: "10px",
+              border:
+                formNoticeType === "success"
+                  ? "1px solid #bbf7d0"
+                  : "1px solid #fecaca",
+              backgroundColor:
+                formNoticeType === "success" ? "#f0fdf4" : "#fef2f2",
+              color: formNoticeType === "success" ? "#166534" : "#b91c1c",
+              fontSize: "13px",
+              lineHeight: "1.6",
+              textAlign: isRTL ? "right" : "left",
+            }}
+          >
+            {formNotice}
+          </div>
+        )}
+
         {authMode === "email_signup" && (
           <>
             <input
@@ -476,6 +549,43 @@ const Login = () => {
           >
             نسيت كلمة المرور؟
           </button>
+        )}
+
+        {authMode === "email_login" && resetNotice && (
+          <div
+            style={{
+              padding: "12px",
+              borderRadius: "10px",
+              border:
+                resetNoticeType === "success"
+                  ? "1px solid #bbf7d0"
+                  : "1px solid #fecaca",
+              backgroundColor:
+                resetNoticeType === "success" ? "#f0fdf4" : "#fef2f2",
+              color: resetNoticeType === "success" ? "#166534" : "#b91c1c",
+              fontSize: "13px",
+              lineHeight: "1.6",
+              textAlign: isRTL ? "right" : "left",
+            }}
+          >
+            {resetNotice}
+          </div>
+        )}
+
+        {authMode === "email_login" && resetSending && !resetNotice && (
+          <div
+            style={{
+              padding: "10px",
+              borderRadius: "10px",
+              border: "1px solid #bfdbfe",
+              backgroundColor: "#eff6ff",
+              color: "#1e40af",
+              fontSize: "13px",
+              textAlign: "center",
+            }}
+          >
+            {isRTL ? "جاري إرسال رابط الاستعادة..." : "Sending recovery link..."}
+          </div>
         )}
 
         {authMode === "email_signup" && (
