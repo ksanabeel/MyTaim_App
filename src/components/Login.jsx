@@ -21,6 +21,12 @@ const Login = () => {
   const [referrerCode, setReferrerCode] = useState("");
 
   const [loading, setLoading] = useState(false);
+  const [authError, setAuthError] = useState("");
+  const [resendEmail, setResendEmail] = useState("");
+  const [resendMessage, setResendMessage] = useState("");
+  const [resendMessageType, setResendMessageType] = useState("");
+  const [resendCooldown, setResendCooldown] = useState(0);
+  const [resendLoading, setResendLoading] = useState(false);
   const [activeLegalDoc, setActiveLegalDoc] = useState(null);
 
   const [legalContentAr, setLegalContentAr] = useState("");
@@ -73,6 +79,16 @@ const Login = () => {
       setUsernameStatus(data ? "taken" : "available");
     }, 400);
   }, [authMode, username]);
+
+  useEffect(() => {
+    if (resendCooldown <= 0) return undefined;
+
+    const timer = setInterval(() => {
+      setResendCooldown((current) => Math.max(current - 1, 0));
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, [resendCooldown]);
 
   useEffect(() => {
     if (!activeLegalDoc) return;
@@ -141,8 +157,45 @@ const Login = () => {
     return data;
   };
 
+  const handleResendConfirmation = async () => {
+    if (!resendEmail || resendCooldown > 0 || resendLoading) return;
+
+    setResendLoading(true);
+    setResendMessage("");
+    setResendMessageType("");
+    try {
+      const { error } = await supabase.auth.resend({
+        type: "signup",
+        email: resendEmail,
+      });
+
+      if (error) throw error;
+
+      setResendMessage(
+        isRTL
+          ? "تم إرسال رابط التفعيل إلى بريدك الإلكتروني بنجاح، يرجى مراجعة صندوق الوارد والبريد غير الهام (Spam)."
+          : "The confirmation link was sent successfully. Please check your inbox and spam folder.",
+      );
+      setResendMessageType("success");
+      setResendCooldown(60);
+    } catch (error) {
+      setResendMessage(
+        isRTL
+          ? "تعذر إرسال رابط التفعيل حالياً. يرجى المحاولة لاحقاً."
+          : "We could not resend the confirmation link right now. Please try again later.",
+      );
+      setResendMessageType("error");
+      console.error("Failed to resend confirmation email:", error);
+    } finally {
+      setResendLoading(false);
+    }
+  };
+
   const handleEmailAuth = async (e) => {
     e.preventDefault();
+    setAuthError("");
+    setResendMessage("");
+    setResendMessageType("");
     setLoading(true);
     try {
       if (authMode === "email_login") {
@@ -151,7 +204,24 @@ const Login = () => {
           email: loginEmail,
           password,
         });
-        if (error) throw error;
+        if (error) {
+          const errorText = `${error.code || ""} ${error.message || ""}`.toLowerCase();
+          const isEmailNotConfirmed =
+            errorText.includes("email_not_confirmed") ||
+            errorText.includes("email not confirmed");
+
+          if (isEmailNotConfirmed) {
+            setResendEmail(loginEmail);
+            setAuthError(
+              isRTL
+                ? "البريد الإلكتروني غير مؤكد. يمكنك إعادة إرسال رابط التفعيل."
+                : "Your email address is not confirmed. You can resend the confirmation link.",
+            );
+          } else {
+            alert("حدث خطأ: " + error.message);
+          }
+          return;
+        }
       } else if (authMode === "email_signup") {
         if (!fullName.trim()) {
           alert("الرجاء إدخال الاسم الكامل");
@@ -454,6 +524,58 @@ const Login = () => {
               />
             </div>
           </>
+        )}
+
+        {authMode === "email_login" && authError && (
+          <div
+            style={{
+              padding: "12px",
+              borderRadius: "10px",
+              border: "1px solid #fecaca",
+              backgroundColor: "#fef2f2",
+              color: "#b91c1c",
+              fontSize: "13px",
+              lineHeight: "1.6",
+              textAlign: isRTL ? "right" : "left",
+            }}
+          >
+            <div>{authError}</div>
+            <button
+              type="button"
+              onClick={handleResendConfirmation}
+              disabled={resendLoading || resendCooldown > 0}
+              style={{
+                marginTop: "8px",
+                padding: "0",
+                border: "none",
+                background: "transparent",
+                color: resendLoading || resendCooldown > 0 ? "#94a3b8" : "#2563eb",
+                cursor: resendLoading || resendCooldown > 0 ? "not-allowed" : "pointer",
+                fontWeight: "bold",
+                textDecoration: "underline",
+              }}
+            >
+              {resendLoading
+                ? isRTL
+                  ? "جاري الإرسال..."
+                  : "Sending..."
+                : resendCooldown > 0
+                ? `${isRTL ? "يمكن إعادة الإرسال بعد" : "Resend available in"} ${resendCooldown}${isRTL ? " ثانية" : "s"}`
+                : isRTL
+                ? "إعادة إرسال رابط التفعيل 📩"
+                : "Resend Confirmation Email 📩"}
+            </button>
+            {resendMessage && (
+              <div
+                style={{
+                  marginTop: "8px",
+                  color: resendMessageType === "success" ? "#15803d" : "#b91c1c",
+                }}
+              >
+                {resendMessage}
+              </div>
+            )}
+          </div>
         )}
 
         <button
