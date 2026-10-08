@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { supabase } from "../lib/supabase";
 import { useTranslation } from "react-i18next";
 
@@ -15,6 +15,8 @@ const Login = () => {
 
   const [phone, setPhone] = useState("");
   const [username, setUsername] = useState("");
+  const [usernameStatus, setUsernameStatus] = useState("idle");
+  const usernameCheckTimeoutRef = useRef(null);
   const [referralSource, setReferralSource] = useState("");
   const [referrerCode, setReferrerCode] = useState("");
 
@@ -23,6 +25,54 @@ const Login = () => {
 
   const [legalContentAr, setLegalContentAr] = useState("");
   const [legalContentEn, setLegalContentEn] = useState("");
+
+  useEffect(() => {
+    return () => {
+      if (usernameCheckTimeoutRef.current) {
+        clearTimeout(usernameCheckTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    if (authMode !== "email_signup") return;
+
+    const cleanUsername = username.trim().toLowerCase();
+    if (usernameCheckTimeoutRef.current) {
+      clearTimeout(usernameCheckTimeoutRef.current);
+    }
+
+    if (!cleanUsername) {
+      setUsernameStatus("idle");
+      return;
+    }
+
+    if (!/^[a-z0-9_]+$/.test(cleanUsername)) {
+      setUsernameStatus("invalid");
+      return;
+    }
+
+    if (cleanUsername.length < 4) {
+      setUsernameStatus("too_short");
+      return;
+    }
+
+    setUsernameStatus("checking");
+    usernameCheckTimeoutRef.current = setTimeout(async () => {
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("id")
+        .eq("username", cleanUsername)
+        .maybeSingle();
+
+      if (error) {
+        setUsernameStatus("error");
+        return;
+      }
+
+      setUsernameStatus(data ? "taken" : "available");
+    }, 400);
+  }, [authMode, username]);
 
   useEffect(() => {
     if (!activeLegalDoc) return;
@@ -108,13 +158,7 @@ const Login = () => {
           setLoading(false);
           return;
         }
-        if (!username.trim()) {
-          alert("الرجاء إدخال اسم المستخدم");
-          setLoading(false);
-          return;
-        }
-        if (!/^[a-zA-Z0-9_]+$/.test(username.trim())) {
-          alert("اسم المستخدم يجب أن يحتوي على أحرف إنجليزية وأرقام فقط بدون مسافات");
+        if (usernameStatus !== "available") {
           setLoading(false);
           return;
         }
@@ -125,18 +169,6 @@ const Login = () => {
         }
 
         const cleanUsername = username.trim().replace(/^@/, "");
-
-        const { data: existingUser } = await supabase
-          .from("profiles")
-          .select("id")
-          .eq("username", cleanUsername)
-          .maybeSingle();
-
-        if (existingUser) {
-          alert("اسم المستخدم مستخدم بالفعل، يرجى اختيار اسم آخر");
-          setLoading(false);
-          return;
-        }
 
         let referrerId = null;
         if (referrerCode.trim()) {
@@ -171,6 +203,7 @@ const Login = () => {
         setAuthMode("email_login");
         setPassword("");
         setUsername("");
+        setUsernameStatus("idle");
         setPhone("");
         setReferralSource("");
         setReferrerCode("");
@@ -259,10 +292,43 @@ const Login = () => {
                   ...styles.input,
                   textAlign: isRTL ? "right" : "left",
                   [isRTL ? "paddingRight" : "paddingLeft"]: "32px",
+                  border:
+                    usernameStatus === "taken" ||
+                    usernameStatus === "invalid" ||
+                    usernameStatus === "too_short" ||
+                    usernameStatus === "error"
+                      ? "1px solid #fca5a5"
+                      : usernameStatus === "available"
+                      ? "1px solid #86efac"
+                      : styles.input.border,
                 }}
                 dir="ltr"
                 required
               />
+              {usernameStatus !== "idle" && (
+                <p
+                  style={{
+                    margin: "6px 0 0",
+                    fontSize: "12px",
+                    fontWeight: "bold",
+                    textAlign: isRTL ? "right" : "left",
+                    color:
+                      usernameStatus === "available"
+                        ? "#16a34a"
+                        : usernameStatus === "checking"
+                        ? "#64748b"
+                        : "#dc2626",
+                  }}
+                >
+                  {usernameStatus === "checking" && "⏳ جاري التحقق..."}
+                  {usernameStatus === "available" && "✅ متاح"}
+                  {usernameStatus === "taken" && "❌ مستخدم مسبقاً"}
+                  {usernameStatus === "invalid" &&
+                    "❌ استخدم أحرفاً إنجليزية وأرقاماً وشرطة سفلية فقط بدون مسافات"}
+                  {usernameStatus === "too_short" && "❌ يجب أن يتكون من 4 خانات على الأقل"}
+                  {usernameStatus === "error" && "❌ تعذر التحقق حالياً، حاول مرة أخرى"}
+                </p>
+              )}
             </div>
             <p
               style={{
@@ -390,7 +456,26 @@ const Login = () => {
           </>
         )}
 
-        <button type="submit" disabled={loading} style={styles.submitBtn}>
+        <button
+          type="submit"
+          disabled={
+            loading ||
+            (authMode === "email_signup" && usernameStatus !== "available")
+          }
+          style={{
+            ...styles.submitBtn,
+            opacity:
+              loading ||
+              (authMode === "email_signup" && usernameStatus !== "available")
+                ? 0.6
+                : 1,
+            cursor:
+              loading ||
+              (authMode === "email_signup" && usernameStatus !== "available")
+                ? "not-allowed"
+                : "pointer",
+          }}
+        >
           {loading
             ? "جاري التحقق..."
             : authMode === "email_login"
