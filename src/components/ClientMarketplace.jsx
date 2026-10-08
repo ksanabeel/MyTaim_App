@@ -31,7 +31,9 @@ export default function ClientMarketplace({
 }) {
   const { t, i18n } = useTranslation();
   const { storeUsername } = useParams();
-  const username = storeUsername ? storeUsername.replace("@", "") : null;
+  const username = storeUsername
+    ? decodeURIComponent(storeUsername).replace(/^@/, "")
+    : null;
   const isRTL = i18n.language === "ar";
   const userId = session?.user?.id;
 

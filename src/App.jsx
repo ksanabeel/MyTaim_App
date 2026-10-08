@@ -28,7 +28,7 @@ const UpdatePasswordModal = React.lazy(() =>
 const MoyasarPayment = React.lazy(() => import("./components/MoyasarPayment"));
 import BookingTable from "./components/BookingTable";
 import Footer from "./components/Footer";
-import { HashRouter, Routes, Route, useNavigate } from "react-router-dom";
+import { BrowserRouter, Routes, Route, useNavigate } from "react-router-dom";
 import { supabase } from "./lib/supabase";
 import { useTranslation } from "react-i18next";
 import { HelmetProvider } from "react-helmet-async";
@@ -3699,11 +3699,11 @@ function MainAppContent() {
 export default function AppWrapper() {
   return (
     <HelmetProvider>
-      <HashRouter>
+      <BrowserRouter>
         {/* <BetaGate> */}
         <MainAppContent />
         {/* </BetaGate> */}
-      </HashRouter>
+      </BrowserRouter>
     </HelmetProvider>
   );
 }
