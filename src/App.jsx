@@ -381,6 +381,16 @@ function MainAppContent() {
   }, [session, fetchAllData]);
 
   useEffect(() => {
+    const handleRefresh = () => {
+      if (session?.user?.id) {
+        fetchAllData(session.user.id);
+      }
+    };
+    window.addEventListener("app:refresh-data", handleRefresh);
+    return () => window.removeEventListener("app:refresh-data", handleRefresh);
+  }, [session, fetchAllData]);
+
+  useEffect(() => {
     if (session && showLoginModal) {
       setShowLoginModal(false);
     }

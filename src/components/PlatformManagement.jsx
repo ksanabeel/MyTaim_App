@@ -758,13 +758,23 @@ export default function PlatformManagement({
 
         if (offeringIds.length > 0) {
           // 2. تحديث الحجوزات المرتبطة بخدمات هذا المزود لتصبح "مدفوعة"
-          const { error: bookingError } = await supabase
+          const { data: unpaidBookings, error: fetchErr } = await supabase
             .from("bookings")
-            .update({ is_commission_paid: true })
-            .in("offering_id", offeringIds) // نبحث عن الحجوزات التابعة لخدماته فقط
+            .select("id")
+            .in("offering_id", offeringIds)
             .eq("is_commission_paid", false);
 
-          if (bookingError) throw bookingError;
+          if (fetchErr) throw fetchErr;
+
+          if (unpaidBookings && unpaidBookings.length > 0) {
+            const bookingIds = unpaidBookings.map((b) => b.id);
+            const { error: rpcError } = await supabase.rpc(
+              "mark_commission_paid",
+              { p_booking_ids: bookingIds },
+            );
+
+            if (rpcError) throw rpcError;
+          }
         }
 
         // 3. إخفاء رسالة المطالبة من لوحة الإدارة (جعلها مقروءة)

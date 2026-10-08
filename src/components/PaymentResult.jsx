@@ -1,42 +1,147 @@
-import React, { useEffect } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
-import { supabase } from "../lib/supabase"; // تأكد من المسار الصحيح
+import { supabase } from "../lib/supabase";
+
+const PROCESSING = "processing";
+const SUCCESS = "success";
+const FAILED = "failed";
+const UNPAID = "unpaid";
 
 export default function PaymentResult() {
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
 
-  // قراءة البيانات من الرابط
   const paymentId = searchParams.get("id");
   const status = searchParams.get("status");
   const message = searchParams.get("message");
-
-  // غيرنا الاسم ليكون booking_id ليتناسب مع جدول الحجوزات
   const bookingId = searchParams.get("booking_id");
 
-  useEffect(() => {
-    // تحديث قاعدة البيانات فقط إذا كان الدفع ناجحاً وهناك معرف للحجز
-    if (status === "paid" && bookingId) {
-      const updateCommissionStatus = async () => {
-        try {
-          const { error } = await supabase
-            .from("bookings") // ⬅️ اسم الجدول الصحيح من صورك
-            .update({
-              is_commission_paid: true, // ⬅️ اسم العمود الصحيح، وتغيير قيمته إلى مدفوع
-              // ملاحظة: إذا أردت حفظ رقم عملية الدفع (paymentId)، يجب عليك إنشاء عمود جديد في جدول bookings وتسميته payment_id
-            })
-            .in("id", bookingId.split(",")); // 👈 التعديل هنا: يقرأ كل الأرقام ويحولها لمدفوعة دفعة واحدة
+  const [updateState, setUpdateState] = useState(PROCESSING);
+  const [updateMessage, setUpdateMessage] = useState("");
 
-          if (error) throw error;
-          console.log("تم تحديث حالة العمولة بنجاح إلى TRUE!");
-        } catch (error) {
-          console.error("خطأ أثناء تحديث البيانات:", error.message);
-        }
-      };
-
-      updateCommissionStatus();
+  const refreshAppData = useCallback(() => {
+    try {
+      window.dispatchEvent(new CustomEvent("app:refresh-data"));
+    } catch (_e) {
+      // ignore — main app will still refresh on next navigation
     }
-  }, [status, bookingId, paymentId]);
+  }, []);
+
+  useEffect(() => {
+    if (status !== "paid") {
+      setUpdateState(UNPAID);
+      return;
+    }
+
+    if (!bookingId) {
+      setUpdateState(FAILED);
+      setUpdateMessage("لم يتم العثور على معرف الحجز في الرابط");
+      return;
+    }
+
+    const bookingIds = bookingId
+      .split(",")
+      .map((id) => id.trim())
+      .filter(Boolean);
+
+    if (bookingIds.length === 0) {
+      setUpdateState(FAILED);
+      setUpdateMessage("لم يتم العثور على معرف الحجز في الرابط");
+      return;
+    }
+
+    let cancelled = false;
+
+    const updateCommissionStatus = async () => {
+      try {
+        const { error } = await supabase.rpc("mark_commission_paid", {
+          p_booking_ids: bookingIds,
+        });
+
+        if (cancelled) return;
+
+        if (error) throw error;
+
+        setUpdateState(SUCCESS);
+        refreshAppData();
+
+        const cleanUrl = window.location.pathname;
+        window.history.replaceState(null, "", cleanUrl);
+        setSearchParams({}, { replace: true });
+      } catch (error) {
+        if (cancelled) return;
+        console.error("Failed to mark commission as paid:", error);
+        setUpdateState(FAILED);
+        setUpdateMessage("تعذّر تحديث حالة العمولة تلقائياً. يرجى التواصل مع الدعم.");
+      }
+    };
+
+    updateCommissionStatus();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [status, bookingId, refreshAppData, setSearchParams]);
+
+  const renderUpdateStatus = () => {
+    if (status !== "paid") return null;
+
+    if (updateState === PROCESSING) {
+      return (
+        <div
+          style={{
+            marginTop: "16px",
+            padding: "12px 20px",
+            backgroundColor: "#eff6ff",
+            borderRadius: "10px",
+            border: "1px solid #bfdbfe",
+            color: "#1e40af",
+            fontSize: "0.95rem",
+          }}
+        >
+          جاري تحديث حالة العمولة...
+        </div>
+      );
+    }
+
+    if (updateState === SUCCESS) {
+      return (
+        <div
+          style={{
+            marginTop: "16px",
+            padding: "12px 20px",
+            backgroundColor: "#f0fdf4",
+            borderRadius: "10px",
+            border: "1px solid #bbf7d0",
+            color: "#166534",
+            fontSize: "0.95rem",
+          }}
+        >
+          تم تحديث حالة العمولة إلى مدفوعة بنجاح
+        </div>
+      );
+    }
+
+    if (updateState === FAILED) {
+      return (
+        <div
+          style={{
+            marginTop: "16px",
+            padding: "12px 20px",
+            backgroundColor: "#fef2f2",
+            borderRadius: "10px",
+            border: "1px solid #fecaca",
+            color: "#991b1b",
+            fontSize: "0.95rem",
+          }}
+        >
+          {updateMessage || "تعذّر تحديث حالة العمولة"}
+        </div>
+      );
+    }
+
+    return null;
+  };
 
   return (
     <div
@@ -60,18 +165,21 @@ export default function PaymentResult() {
           <p style={{ color: "#475569", fontSize: "1.1rem" }}>
             شكراً لك، تم تأكيد سداد العمولة وتحديث بياناتك بنجاح.
           </p>
-          <div
-            style={{
-              background: "#f8fafc",
-              padding: "15px",
-              borderRadius: "10px",
-              marginTop: "20px",
-              border: "1px solid #e2e8f0",
-              direction: "ltr",
-            }}
-          >
-            <strong>رقم العملية:</strong> {paymentId}
-          </div>
+          {paymentId && (
+            <div
+              style={{
+                background: "#f8fafc",
+                padding: "15px",
+                borderRadius: "10px",
+                marginTop: "20px",
+                border: "1px solid #e2e8f0",
+                direction: "ltr",
+              }}
+            >
+              <strong>رقم العملية:</strong> {paymentId}
+            </div>
+          )}
+          {renderUpdateStatus()}
         </>
       ) : (
         <>

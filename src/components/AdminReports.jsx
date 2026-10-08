@@ -403,14 +403,23 @@ export default function AdminReports({
     if (!payoutModalData) return;
     setIsProcessingPayout(true);
     try {
-      const { error } = await supabase
+      const { data: unpaidBookings, error: fetchErr } = await supabase
         .from("bookings")
-        .update({ is_affiliate_paid: true })
+        .select("id")
         .in("customer_id", payoutModalData.referredUserIds)
         .eq("status", "completed")
         .is("is_affiliate_paid", false);
 
-      if (error) throw error;
+      if (fetchErr) throw fetchErr;
+
+      if (unpaidBookings && unpaidBookings.length > 0) {
+        const bookingIds = unpaidBookings.map((b) => b.id);
+        const { error: rpcError } = await supabase.rpc("mark_affiliate_paid", {
+          p_booking_ids: bookingIds,
+        });
+
+        if (rpcError) throw rpcError;
+      }
 
       alert(
         t("payout_success_alert", "تم تسجيل سداد مبلغ ") +
