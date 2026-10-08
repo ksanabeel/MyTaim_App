@@ -55,7 +55,7 @@ export default function PaymentResult() {
     const updateCommissionStatus = async () => {
       try {
         const { error } = await supabase.rpc("mark_commission_paid", {
-          p_booking_ids: bookingIds,
+          p_booking_ids: bookingIds.join(","),
         });
 
         if (cancelled) return;
@@ -70,7 +70,12 @@ export default function PaymentResult() {
         setSearchParams({}, { replace: true });
       } catch (error) {
         if (cancelled) return;
-        console.error("Failed to mark commission as paid:", error);
+        console.error("Failed to mark commission as paid:", {
+          message: error?.message,
+          code: error?.code,
+          details: error?.details,
+          hint: error?.hint,
+        });
         setUpdateState(FAILED);
         setUpdateMessage("تعذّر تحديث حالة العمولة تلقائياً. يرجى التواصل مع الدعم.");
       }

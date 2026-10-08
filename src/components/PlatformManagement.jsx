@@ -363,6 +363,7 @@ export default function PlatformManagement({
           affiliate_rate: newAffiliateRateDec,
           platform_name: inputName,
           platform_logo: inputLogo,
+          logo_url: inputLogo,
           bank_accounts: inputBankAccounts,
           welcome_msg_ar: inputWelcomeAr,
           welcome_msg_en: inputWelcomeEn,
