@@ -2,33 +2,28 @@ import { useState, useEffect } from "react";
 import { supabase } from "../lib/supabase";
 import { useTranslation } from "react-i18next";
 
-// 🚀 تهيئة Capacitor لضمان الدخول داخل التطبيق (Native/In-App UX)
-import { Browser } from "@capacitor/browser";
-import { App } from "@capacitor/app";
-import { SignInWithApple } from "@capacitor-community/apple-sign-in";
-
 const Login = () => {
   const { t, i18n } = useTranslation();
   const isRTL = i18n.language === "ar";
 
-  // حالات الدخول
-  const [authMode, setAuthMode] = useState("email_login"); // 'email_login', 'email_signup', 'phone_login', 'phone_otp'
+  const [authMode, setAuthMode] = useState("email_login");
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [fullName, setFullName] = useState("");
+  const [identifier, setIdentifier] = useState("");
 
   const [phone, setPhone] = useState("");
-  const [otp, setOtp] = useState("");
+  const [username, setUsername] = useState("");
+  const [referralSource, setReferralSource] = useState("");
+  const [referrerCode, setReferrerCode] = useState("");
 
   const [loading, setLoading] = useState(false);
-  const [activeLegalDoc, setActiveLegalDoc] = useState(null); // 'terms', 'privacy', 'refund'
+  const [activeLegalDoc, setActiveLegalDoc] = useState(null);
 
-  // ✨ تخزين النصوص القانونية (عربي وإنجليزي) لجلبها من قاعدة البيانات أو استخدام النصوص الافتراضية
   const [legalContentAr, setLegalContentAr] = useState("");
   const [legalContentEn, setLegalContentEn] = useState("");
 
-  // ✨ جلب أحدث السياسات من جدول platform_settings عند فتح نافذة قانونية
   useEffect(() => {
     if (!activeLegalDoc) return;
 
@@ -79,90 +74,21 @@ const Login = () => {
     fetchLegalTexts();
   }, [activeLegalDoc]);
 
-  // ✨ إعداد دائم داخل التطبيق لاستلام الرابط العميق (Deep Link Callback)
-  useEffect(() => {
-    let listener;
-
-    const setupListener = async () => {
-      listener = await App.addListener("appUrlOpen", async (event) => {
-        if (event.url.includes("com.bookonmap.app://auth-callback")) {
-          try {
-            const url = new URL(event.url);
-            const hash = url.hash.startsWith("#")
-              ? url.hash.substring(1)
-              : url.hash;
-            const params = new URLSearchParams(hash);
-            const accessToken = params.get("access_token");
-            const refreshToken = params.get("refresh_token");
-
-            if (accessToken) {
-              const { data, error } =
-                await supabase.auth.setSession({
-                  access_token: accessToken,
-                  refresh_token: refreshToken || "",
-                });
-              if (error) {
-                console.error("Session error:", error.message);
-              }
-            }
-          } catch (err) {
-            console.error("Deep link parse error:", err);
-          }
-        }
-      });
-    };
-
-    setupListener();
-
-    return () => {
-      if (listener) listener.remove();
-    };
-  }, []);
-
-  // تبديل اللغة
   const toggleLanguage = () => {
     const newLang = i18n.language === "ar" ? "en" : "ar";
     i18n.changeLanguage(newLang);
     document.documentElement.dir = newLang === "ar" ? "rtl" : "ltr";
   };
 
-  const handleGoogleLogin = async () => {
-    try {
-      const { error } = await supabase.auth.signInWithOAuth({
-        provider: "google",
-        options: {
-          redirectTo: "com.bookonmap.app://auth-callback",
-        },
-      });
-      if (error) throw error;
-    } catch (error) {
-      alert("خطأ في الاتصال بجوجل: " + error.message);
+  const resolveLoginEmail = async (loginValue) => {
+    if (loginValue.includes("@")) return loginValue;
+    const { data, error } = await supabase.rpc("get_email_by_phone", {
+      p_phone: loginValue.trim(),
+    });
+    if (error || !data) {
+      throw new Error("لم يتم العثور على حساب بهذا الرقم");
     }
-  };
-
-  const handleAppleLogin = async () => {
-    try {
-      const { response } = await SignInWithApple.authorize({
-        clientId: "com.bookonmap.app.service",
-        scopes: "email name",
-      });
-
-      const idToken = response.identityToken;
-      if (!idToken) {
-        throw new Error("لم يتم إرجاع رمز تحقق من أبل");
-      }
-
-      const { data, error } = await supabase.auth.signInWithIdToken({
-        provider: "apple",
-        token: idToken,
-      });
-
-      if (error) throw error;
-      console.log("تم تسجيل الدخول بنجاح!", data);
-    } catch (error) {
-      console.error("حدث خطأ أثناء تسجيل الدخول بـ Apple:", error);
-      alert("حدث خطأ أثناء تسجيل الدخول بحساب أبل.");
-    }
+    return data;
   };
 
   const handleEmailAuth = async (e) => {
@@ -170,22 +96,84 @@ const Login = () => {
     setLoading(true);
     try {
       if (authMode === "email_login") {
+        const loginEmail = await resolveLoginEmail(identifier);
         const { error } = await supabase.auth.signInWithPassword({
-          email,
+          email: loginEmail,
           password,
         });
         if (error) throw error;
       } else if (authMode === "email_signup") {
-        if (!fullName.trim()) return alert("الرجاء إدخال الاسم الكامل");
+        if (!fullName.trim()) {
+          alert("الرجاء إدخال الاسم الكامل");
+          setLoading(false);
+          return;
+        }
+        if (!username.trim()) {
+          alert("الرجاء إدخال اسم المستخدم");
+          setLoading(false);
+          return;
+        }
+        if (!/^[a-zA-Z0-9_]+$/.test(username.trim())) {
+          alert("اسم المستخدم يجب أن يحتوي على أحرف إنجليزية وأرقام فقط بدون مسافات");
+          setLoading(false);
+          return;
+        }
+        if (!phone.trim()) {
+          alert("الرجاء إدخال رقم الجوال");
+          setLoading(false);
+          return;
+        }
+
+        const cleanUsername = username.trim().replace(/^@/, "");
+
+        const { data: existingUser } = await supabase
+          .from("profiles")
+          .select("id")
+          .eq("username", cleanUsername)
+          .maybeSingle();
+
+        if (existingUser) {
+          alert("اسم المستخدم مستخدم بالفعل، يرجى اختيار اسم آخر");
+          setLoading(false);
+          return;
+        }
+
+        let referrerId = null;
+        if (referrerCode.trim()) {
+          const cleanRefCode = referrerCode.trim().replace(/^@/, "");
+          const { data: referrer } = await supabase
+            .from("profiles")
+            .select("id")
+            .eq("username", cleanRefCode)
+            .maybeSingle();
+
+          if (referrer) {
+            referrerId = referrer.id;
+          }
+        }
+
         const { error } = await supabase.auth.signUp({
           email,
           password,
-          options: { data: { full_name: fullName } },
+          options: {
+            data: {
+              full_name: fullName.trim(),
+              username: cleanUsername,
+              phone: phone.trim(),
+              referral_source: referralSource || null,
+              referred_by: referrerId || null,
+            },
+          },
         });
+
         if (error) throw error;
         alert("✅ تم إنشاء الحساب بنجاح! يمكنك الآن تسجيل الدخول.");
         setAuthMode("email_login");
         setPassword("");
+        setUsername("");
+        setPhone("");
+        setReferralSource("");
+        setReferrerCode("");
       }
     } catch (error) {
       alert("حدث خطأ: " + error.message);
@@ -195,13 +183,28 @@ const Login = () => {
   };
 
   const handleResetPassword = async () => {
-    if (!email) {
-      alert("الرجاء إدخال بريدك الإلكتروني في الحقل المخصص أولاً.");
+    let resetEmail = "";
+    if (identifier && identifier.includes("@")) {
+      resetEmail = identifier;
+    } else if (identifier) {
+      setLoading(true);
+      try {
+        resetEmail = await resolveLoginEmail(identifier);
+      } catch (_err) {
+        alert("تعذّر العثور على البريد المرتبط بهذا الحساب. يرجى إدخال البريد الإلكتروني مباشرة.");
+        setLoading(false);
+        return;
+      } finally {
+        setLoading(false);
+      }
+    }
+    if (!resetEmail) {
+      alert("الرجاء إدخال بريدك الإلكتروني أو رقم الجوال في الحقل المخصص أولاً.");
       return;
     }
     setLoading(true);
     try {
-      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      const { error } = await supabase.auth.resetPasswordForEmail(resetEmail, {
         redirectTo: window.location.origin,
       });
       if (error) throw error;
@@ -219,27 +222,94 @@ const Login = () => {
     return (
       <form onSubmit={handleEmailAuth} style={styles.form}>
         {authMode === "email_signup" && (
+          <>
+            <input
+              type="text"
+              placeholder="الاسم الكامل"
+              value={fullName}
+              onChange={(e) => setFullName(e.target.value)}
+              style={{
+                ...styles.input,
+                textAlign: isRTL ? "right" : "left",
+              }}
+              required
+            />
+
+            <div style={{ position: "relative" }}>
+              <span
+                style={{
+                  position: "absolute",
+                  [isRTL ? "right" : "left"]: "14px",
+                  top: "50%",
+                  transform: "translateY(-50%)",
+                  color: "#94a3b8",
+                  fontSize: "15px",
+                  fontWeight: "bold",
+                  pointerEvents: "none",
+                }}
+              >
+                @
+              </span>
+              <input
+                type="text"
+                placeholder="اسم المستخدم"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                style={{
+                  ...styles.input,
+                  textAlign: isRTL ? "right" : "left",
+                  [isRTL ? "paddingRight" : "paddingLeft"]: "32px",
+                }}
+                dir="ltr"
+                required
+              />
+            </div>
+            <p
+              style={{
+                margin: "-6px 0 0 0",
+                fontSize: "11px",
+                color: "#94a3b8",
+                textAlign: isRTL ? "right" : "left",
+                lineHeight: "1.4",
+              }}
+            >
+              * سيتم استخدامه كرابط مباشر لملفك الشخصي وللتسويق.
+            </p>
+
+            <input
+              type="email"
+              placeholder="البريد الإلكتروني"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              style={styles.input}
+              required
+              dir="ltr"
+            />
+
+            <input
+              type="tel"
+              placeholder="رقم الجوال"
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+              style={styles.input}
+              required
+              dir="ltr"
+            />
+          </>
+        )}
+
+        {authMode === "email_login" && (
           <input
             type="text"
-            placeholder="الاسم الكامل"
-            value={fullName}
-            onChange={(e) => setFullName(e.target.value)}
-            style={{
-              ...styles.input,
-              textAlign: isRTL ? "right" : "left",
-            }}
+            placeholder="البريد الإلكتروني أو رقم الجوال"
+            value={identifier}
+            onChange={(e) => setIdentifier(e.target.value)}
+            style={styles.input}
             required
+            dir="ltr"
           />
         )}
-        <input
-          type="email"
-          placeholder="البريد الإلكتروني"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          style={styles.input}
-          required
-          dir="ltr"
-        />
+
         <input
           type="password"
           placeholder="كلمة المرور (6 أحرف على الأقل)"
@@ -270,6 +340,54 @@ const Login = () => {
           >
             نسيت كلمة المرور؟
           </button>
+        )}
+
+        {authMode === "email_signup" && (
+          <>
+            <div
+              style={{
+                marginTop: "4px",
+                paddingTop: "12px",
+                borderTop: "1px dashed #e2e8f0",
+              }}
+            >
+              <p
+                style={{
+                  margin: "0 0 8px 0",
+                  fontSize: "13px",
+                  fontWeight: "bold",
+                  color: "#475569",
+                  textAlign: isRTL ? "right" : "left",
+                }}
+              >
+                بيانات الانضمام والتسويق
+              </p>
+              <select
+                value={referralSource}
+                onChange={(e) => setReferralSource(e.target.value)}
+                style={styles.input}
+              >
+                <option value="">اختر من القائمة...</option>
+                <option value="twitter">تويتر (X)</option>
+                <option value="snapchat">سناب شات</option>
+                <option value="affiliate">(المسوق) شريك Book On Map</option>
+                <option value="search_engine">محرك بحث (جوجل)</option>
+                <option value="other">أخرى</option>
+              </select>
+
+              <input
+                type="text"
+                placeholder="كود المسوق (أدخل Username)"
+                value={referrerCode}
+                onChange={(e) => setReferrerCode(e.target.value)}
+                style={{
+                  ...styles.input,
+                  marginTop: "12px",
+                }}
+                dir="ltr"
+              />
+            </div>
+          </>
         )}
 
         <button type="submit" disabled={loading} style={styles.submitBtn}>
@@ -313,44 +431,6 @@ const Login = () => {
 
         <p style={styles.subtitle}>سجل دخولك لبدء استخدام المنصة</p>
 
-        <div style={styles.socialBtnsContainer}>
-          <button onClick={handleGoogleLogin} style={styles.socialBtn}>
-            <img
-              src="https://cdn.jsdelivr.net/gh/devicons/devicon@latest/icons/google/google-original.svg"
-              alt="Google"
-              style={styles.socialIcon}
-            />
-            جوجل
-          </button>
-
-          <button
-            onClick={handleAppleLogin}
-            style={{
-              ...styles.socialBtn,
-              backgroundColor: "#000",
-              color: "#fff",
-              border: "none",
-            }}
-          >
-            <span
-              style={{
-                fontSize: "1.2rem",
-                marginLeft: "5px",
-                marginRight: "5px",
-              }}
-            >
-              
-            </span>
-            أبل
-          </button>
-        </div>
-
-        <div style={styles.divider}>
-          <span style={styles.dividerLine}></span>
-          <span style={styles.dividerText}>أو</span>
-          <span style={styles.dividerLine}></span>
-        </div>
-
         {renderFormContent()}
 
         <div style={styles.legalLinks}>
@@ -377,7 +457,6 @@ const Login = () => {
         </div>
       </div>
 
-      {/* نافذة عرض السياسات والشروط بنظام الجدول ذي العمودين (عربي يميناً، إنجليزي يساراً) */}
       {activeLegalDoc && (
         <div style={styles.modalOverlay}>
           <div
@@ -564,36 +643,6 @@ const styles = {
   title: { color: "#7c3aed", fontSize: "24px", fontWeight: "900", margin: 0 },
   subtitle: { color: "#64748b", fontSize: "14px", marginBottom: "20px" },
 
-  socialBtnsContainer: {
-    display: "flex",
-    gap: "10px",
-    marginBottom: "10px",
-  },
-  socialBtn: {
-    flex: 1,
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    padding: "10px",
-    borderRadius: "12px",
-    border: "1px solid #cbd5e1",
-    backgroundColor: "#fff",
-    cursor: "pointer",
-    fontSize: "14px",
-    fontWeight: "bold",
-    color: "#1e293b",
-    transition: "all 0.2s",
-  },
-  socialIcon: { width: "20px", marginLeft: "8px", marginRight: "8px" },
-
-  divider: { display: "flex", alignItems: "center", margin: "15px 0" },
-  dividerLine: { flex: 1, height: "1px", backgroundColor: "#e2e8f0" },
-  dividerText: {
-    margin: "0 15px",
-    color: "#94a3b8",
-    fontSize: "12px",
-    fontWeight: "bold",
-  },
   form: { display: "flex", flexDirection: "column", gap: "12px" },
   input: {
     padding: "14px",
@@ -608,7 +657,6 @@ const styles = {
     padding: "14px",
     borderRadius: "12px",
     border: "none",
-    backgroundColor: "linear-gradient(135deg, #7c3aed 0%, #4f46e5 100%)",
     backgroundColor: "#1e293b",
     color: "#fff",
     cursor: "pointer",
