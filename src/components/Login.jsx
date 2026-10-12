@@ -172,6 +172,9 @@ const Login = () => {
       const { error } = await supabase.auth.resend({
         type: "signup",
         email: resendEmail,
+        options: {
+          emailRedirectTo: `${window.location.origin}/`,
+        },
       });
 
       if (error) throw error;
@@ -267,6 +270,7 @@ const Login = () => {
           email,
           password,
           options: {
+            emailRedirectTo: `${window.location.origin}/`,
             data: {
               full_name: fullName.trim(),
               username: cleanUsername,

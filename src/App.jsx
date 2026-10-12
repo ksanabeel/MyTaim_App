@@ -78,6 +78,7 @@ function MainAppContent() {
   const [showLoginModal, setShowLoginModal] = useState(false);
 
   const [showUpdatePassword, setShowUpdatePassword] = useState(false);
+  const [authNotice, setAuthNotice] = useState("");
 
   const [showAddModal, setShowAddModal] = useState(false);
   const [editOfferingData, setEditOfferingData] = useState(null);
@@ -341,12 +342,11 @@ function MainAppContent() {
   }, []);
 
   useEffect(() => {
-    const hash = window.location.hash;
-    const search = window.location.search;
-    const hasRecoveryInUrl =
-      (hash && (hash.includes("type=recovery") || hash.includes("access_token"))) ||
-      (search && (search.includes("type=recovery") || search.includes("access_token")));
-    if (hasRecoveryInUrl) {
+    const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ""));
+    const searchParams = new URLSearchParams(window.location.search);
+    const authType = hashParams.get("type") || searchParams.get("type");
+
+    if (authType === "recovery") {
       setShowUpdatePassword(true);
     }
 
@@ -356,15 +356,23 @@ function MainAppContent() {
     });
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((_e, session) => {
-      if (_e === "PASSWORD_RECOVERY") {
+    } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === "PASSWORD_RECOVERY") {
         setShowUpdatePassword(true);
       }
+
+      if (event === "SIGNED_IN" && authType === "signup") {
+        setShowUpdatePassword(false);
+        setAuthNotice("تم تأكيد بريدك الإلكتروني وتفعيل حسابك بنجاح. أهلاً بك في BookOnMap.");
+        navigate("/");
+        window.history.replaceState({}, document.title, window.location.pathname);
+      }
+
       setSession(session);
       fetchAllData(session?.user?.id);
     });
     return () => subscription.unsubscribe();
-  }, [fetchAllData]);
+  }, [fetchAllData, navigate]);
 
   useEffect(() => {
     if (!session?.user?.id) return;
@@ -773,6 +781,46 @@ function MainAppContent() {
           scrollbar-width: none;
         }
       `}</style>
+
+      {authNotice && (
+        <div
+          role="status"
+          style={{
+            position: "fixed",
+            top: "24px",
+            left: "50%",
+            transform: "translateX(-50%)",
+            zIndex: 100000,
+            width: "min(90vw, 520px)",
+            padding: "15px 42px 15px 18px",
+            borderRadius: "14px",
+            backgroundColor: "#ecfdf5",
+            border: "1px solid #86efac",
+            color: "#166534",
+            boxShadow: "0 12px 30px rgba(15, 118, 110, 0.18)",
+            textAlign: "center",
+            fontWeight: "700",
+          }}
+        >
+          {authNotice}
+          <button
+            onClick={() => setAuthNotice("")}
+            aria-label="إغلاق رسالة التأكيد"
+            style={{
+              position: "absolute",
+              top: "8px",
+              right: "10px",
+              border: "none",
+              background: "transparent",
+              color: "#166534",
+              cursor: "pointer",
+              fontSize: "18px",
+            }}
+          >
+            ×
+          </button>
+        </div>
+      )}
 
       {showLoginModal && !session && (
         <div style={{ ...modalOverlay, zIndex: 99999 }}>
