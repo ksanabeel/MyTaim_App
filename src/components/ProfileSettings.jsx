@@ -45,6 +45,7 @@ export default function ProfileSettings({ session, onUpdate }) {
   const [ibanDocumentFile, setIbanDocumentFile] = useState(null);
   const [idDocumentUrl, setIdDocumentUrl] = useState("");
   const [ibanDocumentUrl, setIbanDocumentUrl] = useState("");
+  const [verificationNotes, setVerificationNotes] = useState("");
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
@@ -113,6 +114,7 @@ export default function ProfileSettings({ session, onUpdate }) {
         setVerificationStatus(profileData.verification_status || "unverified");
         setIdDocumentUrl(profileData.id_document_url || "");
         setIbanDocumentUrl(profileData.iban_document_url || "");
+        setVerificationNotes(profileData.verification_notes || "");
       }
 
       // 2. ✨ جلب رابط لوجو المنصة من الإعدادات ✨
@@ -274,6 +276,7 @@ export default function ProfileSettings({ session, onUpdate }) {
             id_document_url: uploadedIdUrl,
             iban_document_url: uploadedIbanUrl,
             verification_status: "pending",
+            verification_notes: null,
           })
           .eq("id", session.user.id);
 
@@ -281,6 +284,7 @@ export default function ProfileSettings({ session, onUpdate }) {
           setVerificationStatus("pending");
           setIdDocumentUrl(uploadedIdUrl);
           setIbanDocumentUrl(uploadedIbanUrl);
+          setVerificationNotes("");
           alert(
             t(
               "verification_sent_success",
@@ -1058,6 +1062,61 @@ export default function ProfileSettings({ session, onUpdate }) {
             )}
           </div>
 
+          {(verificationStatus === "verified" ||
+            verificationStatus === "rejected") &&
+            verificationNotes && (
+              <div
+                style={{
+                  backgroundColor:
+                    verificationStatus === "verified"
+                      ? "#ecfdf5"
+                      : "#fef2f2",
+                  border: `1px solid ${
+                    verificationStatus === "verified"
+                      ? "#a7f3d0"
+                      : "#fecaca"
+                  }`,
+                  borderRadius: "12px",
+                  padding: "15px",
+                  marginBottom: "15px",
+                }}
+              >
+                <strong
+                  style={{
+                    display: "block",
+                    marginBottom: "8px",
+                    color:
+                      verificationStatus === "verified"
+                        ? "#047857"
+                        : "#dc2626",
+                    fontSize: "0.9rem",
+                  }}
+                >
+                  {verificationStatus === "verified"
+                    ? "✅ " +
+                      t(
+                        "admin_verification_note_label",
+                        "ملاحظة من الإدارة:",
+                      )
+                    : "❌ " +
+                      t(
+                        "admin_rejection_note_label",
+                        "سبب الرفض من الإدارة:",
+                      )}
+                </strong>
+                <p
+                  style={{
+                    margin: 0,
+                    fontSize: "0.9rem",
+                    color: "#1e293b",
+                    lineHeight: 1.6,
+                  }}
+                >
+                  {verificationNotes}
+                </p>
+              </div>
+            )}
+
           {verificationStatus === "verified" ? (
             <p
               style={{
@@ -1110,6 +1169,21 @@ export default function ProfileSettings({ session, onUpdate }) {
                       "مثال: 10xxxxxxxxx",
                     )}
                   />
+                  {verificationStatus === "rejected" && (
+                    <p
+                      style={{
+                        fontSize: "0.8rem",
+                        color: "#dc2626",
+                        marginTop: "6px",
+                        fontWeight: "bold",
+                      }}
+                    >
+                      {t(
+                        "resubmit_hint",
+                        "يمكنك تعديل بياناتك وإعادة رفع الملفات ثم إرسال الطلب مجدداً.",
+                      )}
+                    </p>
+                  )}
                 </div>
                 <div>
                   <label style={{ ...lblS, color: "#1e40af" }}>
@@ -1249,7 +1323,8 @@ export default function ProfileSettings({ session, onUpdate }) {
                   onClick={handleVerificationRequest}
                   disabled={isSubmitting || isVerificationUploading}
                   style={{
-                    backgroundColor: "#2563eb",
+                    backgroundColor:
+                      verificationStatus === "rejected" ? "#f59e0b" : "#2563eb",
                     color: "#fff",
                     border: "none",
                     padding: "12px 20px",
@@ -1269,10 +1344,15 @@ export default function ProfileSettings({ session, onUpdate }) {
                       )
                     : isSubmitting
                       ? t("saving_btn", "⏳ جاري الحفظ...")
-                      : t(
-                          "send_verification_btn",
-                          "إرسال طلب التوثيق الآن 🚀",
-                        )}
+                      : verificationStatus === "rejected"
+                        ? t(
+                            "resubmit_verification_btn",
+                            "إعادة إرسال طلب التوثيق 🔄",
+                          )
+                        : t(
+                            "send_verification_btn",
+                            "إرسال طلب التوثيق الآن 🚀",
+                          )}
                 </button>
               )}
             </div>

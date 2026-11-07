@@ -162,6 +162,8 @@ export default function AdminReports({
   const [verificationFilter, setVerificationFilter] = useState("all");
   const [verificationActionLoading, setVerificationActionLoading] = useState("");
   const [verificationSearch, setVerificationSearch] = useState("");
+  const [verificationModal, setVerificationModal] = useState(null);
+  const [verificationNoteText, setVerificationNoteText] = useState("");
 
   // ✨ حالات المراسلة الداخلية في النظام ✨
   const [activeMsgId, setActiveMsgId] = useState(null);
@@ -415,24 +417,26 @@ export default function AdminReports({
     return matchFilter && matchSearch;
   });
 
-  const handleVerificationStatusChange = async (userId, newStatus) => {
-    const confirmMsg =
-      newStatus === "verified"
-        ? t("confirm_approve_verification", "هل تريد توثيق هذا المستخدم؟")
-        : newStatus === "rejected"
-          ? t("confirm_reject_verification", "هل تريد رفض طلب التوثيق؟")
-          : newStatus === "pending"
-            ? t("confirm_set_pending", "هل تريد إعادة الحالة إلى قيد المراجعة؟")
-            : t(
-                "confirm_revoke_verification",
-                "هل تريد إلغاء التوثيق وإعادة الحالة إلى غير موثق؟",
-              );
-    if (!window.confirm(confirmMsg)) return;
+  const openVerificationModal = (user, action) => {
+    setVerificationModal({ user, action });
+    setVerificationNoteText("");
+  };
+
+  const closeVerificationModal = () => {
+    setVerificationModal(null);
+    setVerificationNoteText("");
+  };
+
+  const handleVerificationStatusChange = async (userId, newStatus, note) => {
     setVerificationActionLoading(userId);
     try {
+      const updateData = { verification_status: newStatus };
+      if (newStatus === "verified" || newStatus === "rejected") {
+        updateData.verification_notes = note || null;
+      }
       const { error } = await supabase
         .from("profiles")
-        .update({ verification_status: newStatus })
+        .update(updateData)
         .eq("id", userId);
       if (error) throw error;
       alert(
@@ -442,12 +446,22 @@ export default function AdminReports({
             ? t("verification_rejected_msg", "تم رفض طلب التوثيق ❌")
             : t("update_success", "تم التحديث ✅"),
       );
+      closeVerificationModal();
       fetchStats();
     } catch (err) {
       alert(t("update_error", "حدث خطأ أثناء التحديث: ") + err.message);
     } finally {
       setVerificationActionLoading("");
     }
+  };
+
+  const confirmVerificationModal = () => {
+    if (!verificationModal) return;
+    handleVerificationStatusChange(
+      verificationModal.user.id,
+      verificationModal.action,
+      verificationNoteText,
+    );
   };
 
   const handleResetVerification = async (userId) => {
@@ -2903,6 +2917,24 @@ export default function AdminReports({
                         >
                           {cfg.label}
                         </span>
+                        {u.verification_notes && (
+                          <div
+                            style={{
+                              marginTop: "6px",
+                              fontSize: "0.75rem",
+                              color: "#475569",
+                              backgroundColor: "#f8fafc",
+                              padding: "6px 8px",
+                              borderRadius: "6px",
+                              maxWidth: "180px",
+                              textAlign: isRTL ? "right" : "left",
+                              lineHeight: 1.4,
+                              border: "1px solid #e2e8f0",
+                            }}
+                          >
+                            💬 {u.verification_notes}
+                          </div>
+                        )}
                       </td>
                       <td style={tdS}>
                         <div
@@ -2965,7 +2997,7 @@ export default function AdminReports({
                           {status !== "verified" && (
                             <button
                               onClick={() =>
-                                handleVerificationStatusChange(u.id, "verified")
+                                openVerificationModal(u, "verified")
                               }
                               disabled={isLoading}
                               title={t("approve_verification", "توثيق")}
@@ -2986,7 +3018,7 @@ export default function AdminReports({
                           {status !== "rejected" && (
                             <button
                               onClick={() =>
-                                handleVerificationStatusChange(u.id, "rejected")
+                                openVerificationModal(u, "rejected")
                               }
                               disabled={isLoading}
                               title={t("reject_verification", "رفض")}
@@ -3074,6 +3106,185 @@ export default function AdminReports({
             </table>
           </div>
         </>
+      )}
+
+      {verificationModal && (
+        <div style={modalOverlay}>
+          <div
+            style={{
+              ...modalContent,
+              maxWidth: "500px",
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                borderBottom: "2px solid #f1f5f9",
+                paddingBottom: "15px",
+                marginBottom: "20px",
+              }}
+            >
+              <h2
+                style={{
+                  margin: 0,
+                  fontSize: "1.3rem",
+                  color:
+                    verificationModal.action === "verified"
+                      ? "#047857"
+                      : "#dc2626",
+                }}
+              >
+                {verificationModal.action === "verified"
+                  ? "✅ " +
+                    t(
+                      "approve_verification_title",
+                      "توثيق الحساب",
+                    )
+                  : "❌ " +
+                    t(
+                      "reject_verification_title",
+                      "رفض طلب التوثيق",
+                    )}
+              </h2>
+              <button
+                onClick={closeVerificationModal}
+                style={{
+                  background: "#fef2f2",
+                  border: "none",
+                  width: "35px",
+                  height: "35px",
+                  borderRadius: "50%",
+                  color: "#ef4444",
+                  cursor: "pointer",
+                  fontWeight: "bold",
+                  fontSize: "1.2rem",
+                }}
+              >
+                ✕
+              </button>
+            </div>
+
+            <div
+              style={{
+                backgroundColor: "#f8fafc",
+                padding: "15px",
+                borderRadius: "12px",
+                marginBottom: "20px",
+              }}
+            >
+              <strong style={{ color: "#475569" }}>
+                {t("user_label", "المستخدم:")}
+              </strong>{" "}
+              <span style={{ fontWeight: "bold", color: "#1e293b" }}>
+                {verificationModal.user.full_name ||
+                  t("no_name", "بدون اسم")}{" "}
+              </span>
+              <span
+                dir="ltr"
+                style={{ color: "#7c3aed", fontWeight: "bold" }}
+              >
+                @{verificationModal.user.username || "---"}
+              </span>
+            </div>
+
+            <label
+              style={{
+                display: "block",
+                marginBottom: "8px",
+                fontWeight: "bold",
+                color: "#1e293b",
+                fontSize: "0.95rem",
+              }}
+            >
+              {verificationModal.action === "verified"
+                ? t(
+                    "approval_note_label",
+                    "ملاحظة للمستخدم (اختياري):",
+                  )
+                : t(
+                    "rejection_note_label",
+                    "سبب الرفض / ملاحظة للمستخدم:",
+                  )}
+            </label>
+            <textarea
+              value={verificationNoteText}
+              onChange={(e) => setVerificationNoteText(e.target.value)}
+              rows={4}
+              placeholder={
+                verificationModal.action === "verified"
+                  ? t(
+                      "approval_note_placeholder",
+                      "مثال: تهانينا! تم توثيق حسابك بنجاح ✅",
+                    )
+                  : t(
+                      "rejection_note_placeholder",
+                      "مثال: صورة الهوية غير واضحة، يرجى إعادة رفعها بجودة أعلى.",
+                    )
+              }
+              style={{
+                width: "100%",
+                padding: "12px",
+                borderRadius: "12px",
+                border: "1px solid #cbd5e1",
+                outline: "none",
+                fontFamily: "inherit",
+                fontSize: "0.9rem",
+                resize: "vertical",
+                marginBottom: "20px",
+                boxSizing: "border-box",
+              }}
+            />
+
+            <div style={{ display: "flex", gap: "10px" }}>
+              <button
+                onClick={confirmVerificationModal}
+                disabled={
+                  verificationActionLoading === verificationModal.user.id
+                }
+                style={{
+                  flex: 2,
+                  backgroundColor:
+                    verificationModal.action === "verified"
+                      ? "#10b981"
+                      : "#ef4444",
+                  color: "#fff",
+                  border: "none",
+                  padding: "14px",
+                  borderRadius: "12px",
+                  fontWeight: "900",
+                  fontSize: "1rem",
+                  cursor:
+                    verificationActionLoading === verificationModal.user.id
+                      ? "wait"
+                      : "pointer",
+                }}
+              >
+                {verificationActionLoading === verificationModal.user.id
+                  ? t("processing", "⏳ جاري التنفيذ...")
+                  : verificationModal.action === "verified"
+                    ? t("confirm_approve_btn", "تأكيد التوثيق ✅")
+                    : t("confirm_reject_btn", "تأكيد الرفض ❌")}
+              </button>
+              <button
+                onClick={closeVerificationModal}
+                style={{
+                  flex: 1,
+                  backgroundColor: "#f1f5f9",
+                  color: "#475569",
+                  border: "1px solid #cbd5e1",
+                  padding: "14px",
+                  borderRadius: "12px",
+                  fontWeight: "bold",
+                  cursor: "pointer",
+                }}
+              >
+                {t("cancel_btn", "إلغاء")}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

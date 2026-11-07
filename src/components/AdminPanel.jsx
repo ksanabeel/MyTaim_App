@@ -46,6 +46,8 @@ export default function AdminPanel({ session }) {
   const [newUsername, setNewUsername] = useState("");
   const [newFullName, setNewFullName] = useState("");
   const [verificationActionLoading, setVerificationActionLoading] = useState("");
+  const [verificationModal, setVerificationModal] = useState(null);
+  const [verificationNoteText, setVerificationNoteText] = useState("");
 
   useEffect(() => {
     checkAdminAccess();
@@ -179,19 +181,29 @@ export default function AdminPanel({ session }) {
     fetchAdminData();
   };
 
-  const handleVerificationAction = async (userId, newStatus) => {
-    const confirmMsg =
-      newStatus === "verified"
-        ? t("confirm_approve_verification", "هل تريد توثيق هذا المستخدم؟")
-        : t("confirm_reject_verification", "هل تريد رفض طلب التوثيق؟");
-    if (!window.confirm(confirmMsg)) return;
+  const openVerificationModal = (user, action) => {
+    setVerificationModal({ user, action });
+    setVerificationNoteText("");
+  };
+
+  const closeVerificationModal = () => {
+    setVerificationModal(null);
+    setVerificationNoteText("");
+  };
+
+  const handleVerificationAction = async (userId, newStatus, note) => {
     setVerificationActionLoading(userId);
+    const updateData = { verification_status: newStatus };
+    if (newStatus === "verified" || newStatus === "rejected") {
+      updateData.verification_notes = note || null;
+    }
     const { error } = await supabase
       .from("profiles")
-      .update({ verification_status: newStatus })
+      .update(updateData)
       .eq("id", userId);
     setVerificationActionLoading("");
     if (!error) {
+      closeVerificationModal();
       fetchAdminData();
       alert(
         newStatus === "verified"
@@ -627,9 +639,31 @@ export default function AdminPanel({ session }) {
                     </div>
 
                     <div style={{ display: "flex", gap: "10px" }}>
+                      {u.verification_notes && (
+                        <div
+                          style={{
+                            width: "100%",
+                            backgroundColor: "#f8fafc",
+                            border: "1px solid #e2e8f0",
+                            borderRadius: "10px",
+                            padding: "10px",
+                            marginBottom: "10px",
+                            fontSize: "0.85rem",
+                            color: "#475569",
+                          }}
+                        >
+                          <strong>
+                            {t(
+                              "admin_note_label",
+                              "ملاحظة الإدارة:",
+                            )}{" "}
+                          </strong>
+                          {u.verification_notes}
+                        </div>
+                      )}
                       <button
                         onClick={() =>
-                          handleVerificationAction(u.id, "verified")
+                          openVerificationModal(u, "verified")
                         }
                         disabled={
                           verificationActionLoading === u.id
@@ -649,7 +683,7 @@ export default function AdminPanel({ session }) {
                       </button>
                       <button
                         onClick={() =>
-                          handleVerificationAction(u.id, "rejected")
+                          openVerificationModal(u, "rejected")
                         }
                         disabled={
                           verificationActionLoading === u.id
@@ -798,6 +832,194 @@ export default function AdminPanel({ session }) {
               <button
                 onClick={() => setIsModalOpen(false)}
                 style={{ flex: 1, ...btnStyle("#94a3b8") }}
+              >
+                {t("cancel_btn", "إلغاء")}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {verificationModal && (
+        <div
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: "rgba(15, 23, 42, 0.7)",
+            backdropFilter: "blur(4px)",
+            display: "flex",
+            justifyContent: "center",
+            alignItems: "center",
+            zIndex: 9999,
+            padding: "20px",
+          }}
+        >
+          <div
+            style={{
+              backgroundColor: "#fff",
+              padding: "30px",
+              borderRadius: "20px",
+              width: "100%",
+              maxWidth: "500px",
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                marginBottom: "20px",
+                borderBottom: "2px solid #f1f5f9",
+                paddingBottom: "15px",
+              }}
+            >
+              <h3
+                style={{
+                  margin: 0,
+                  color:
+                    verificationModal.action === "verified"
+                      ? "#047857"
+                      : "#dc2626",
+                }}
+              >
+                {verificationModal.action === "verified"
+                  ? "✅ " +
+                    t("approve_verification_title", "توثيق الحساب")
+                  : "❌ " +
+                    t(
+                      "reject_verification_title",
+                      "رفض طلب التوثيق",
+                    )}
+              </h3>
+              <button
+                onClick={closeVerificationModal}
+                style={{
+                  background: "#fef2f2",
+                  border: "none",
+                  width: "35px",
+                  height: "35px",
+                  borderRadius: "50%",
+                  color: "#ef4444",
+                  cursor: "pointer",
+                  fontWeight: "bold",
+                  fontSize: "1.2rem",
+                }}
+              >
+                ✕
+              </button>
+            </div>
+
+            <div
+              style={{
+                backgroundColor: "#f8fafc",
+                padding: "15px",
+                borderRadius: "12px",
+                marginBottom: "20px",
+              }}
+            >
+              <strong style={{ color: "#475569" }}>
+                {t("user_label", "المستخدم:")}
+              </strong>{" "}
+              <span style={{ fontWeight: "bold", color: "#1e293b" }}>
+                {verificationModal.user.full_name ||
+                  t("no_name", "بدون اسم")}
+              </span>{" "}
+              <span
+                dir="ltr"
+                style={{ color: "#7c3aed", fontWeight: "bold" }}
+              >
+                @{verificationModal.user.username || "---"}
+              </span>
+            </div>
+
+            <label
+              style={{
+                display: "block",
+                marginBottom: "8px",
+                fontWeight: "bold",
+                color: "#1e293b",
+                fontSize: "0.95rem",
+              }}
+            >
+              {verificationModal.action === "verified"
+                ? t(
+                    "approval_note_label",
+                    "ملاحظة للمستخدم (اختياري):",
+                  )
+                : t(
+                    "rejection_note_label",
+                    "سبب الرفض / ملاحظة للمستخدم:",
+                  )}
+            </label>
+            <textarea
+              value={verificationNoteText}
+              onChange={(e) => setVerificationNoteText(e.target.value)}
+              rows={4}
+              placeholder={
+                verificationModal.action === "verified"
+                  ? t(
+                      "approval_note_placeholder",
+                      "مثال: تهانينا! تم توثيق حسابك بنجاح ✅",
+                    )
+                  : t(
+                      "rejection_note_placeholder",
+                      "مثال: صورة الهوية غير واضحة، يرجى إعادة رفعها بجودة أعلى.",
+                    )
+              }
+              style={{
+                width: "100%",
+                padding: "12px",
+                borderRadius: "12px",
+                border: "1px solid #cbd5e1",
+                outline: "none",
+                fontFamily: "inherit",
+                fontSize: "0.9rem",
+                resize: "vertical",
+                marginBottom: "20px",
+                boxSizing: "border-box",
+              }}
+            />
+
+            <div style={{ display: "flex", gap: "10px" }}>
+              <button
+                onClick={() =>
+                  handleVerificationAction(
+                    verificationModal.user.id,
+                    verificationModal.action,
+                    verificationNoteText,
+                  )
+                }
+                disabled={
+                  verificationActionLoading === verificationModal.user.id
+                }
+                style={{
+                  flex: 2,
+                  ...btnStyle(
+                    verificationModal.action === "verified"
+                      ? "#10b981"
+                      : "#ef4444",
+                  ),
+                  cursor:
+                    verificationActionLoading === verificationModal.user.id
+                      ? "wait"
+                      : "pointer",
+                }}
+              >
+                {verificationActionLoading === verificationModal.user.id
+                  ? t("processing", "⏳ جاري التنفيذ...")
+                  : verificationModal.action === "verified"
+                    ? t("confirm_approve_btn", "تأكيد التوثيق ✅")
+                    : t("confirm_reject_btn", "تأكيد الرفض ❌")}
+              </button>
+              <button
+                onClick={closeVerificationModal}
+                style={{
+                  flex: 1,
+                  ...btnStyle("#94a3b8"),
+                }}
               >
                 {t("cancel_btn", "إلغاء")}
               </button>
