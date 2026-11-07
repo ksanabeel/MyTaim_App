@@ -41,9 +41,14 @@ export default function ProfileSettings({ session, onUpdate }) {
   const [nationalId, setNationalId] = useState("");
   const [bankIban, setBankIban] = useState("");
   const [verificationStatus, setVerificationStatus] = useState("unverified");
+  const [idDocumentFile, setIdDocumentFile] = useState(null);
+  const [ibanDocumentFile, setIbanDocumentFile] = useState(null);
+  const [idDocumentUrl, setIdDocumentUrl] = useState("");
+  const [ibanDocumentUrl, setIbanDocumentUrl] = useState("");
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
+  const [isVerificationUploading, setIsVerificationUploading] = useState(false);
 
   const [isDeletingAccount, setIsDeletingAccount] = useState(false);
 
@@ -103,9 +108,11 @@ export default function ProfileSettings({ session, onUpdate }) {
         setLicenseInfo(profileData.license_info || "");
         setAdminNote(profileData.admin_note || "");
         setProviderNote(profileData.provider_note || "");
-        setNationalId(profileData.national_id || "");
-        setBankIban(profileData.bank_iban || "");
+        setNationalId(profileData.national_id || profileData.id_number || "");
+        setBankIban(profileData.bank_iban || profileData.iban || "");
         setVerificationStatus(profileData.verification_status || "unverified");
+        setIdDocumentUrl(profileData.id_document_url || "");
+        setIbanDocumentUrl(profileData.iban_document_url || "");
       }
 
       // 2. ✨ جلب رابط لوجو المنصة من الإعدادات ✨
@@ -197,12 +204,34 @@ export default function ProfileSettings({ session, onUpdate }) {
     }
   };
 
+  const uploadVerificationDocument = async (file, docType) => {
+    if (!file) return null;
+    const fileExt = file.name.split(".").pop();
+    const fileName = `${session.user.id}/${docType}-${Date.now()}.${fileExt}`;
+    const { error: uploadError } = await supabase.storage
+      .from("verification_documents")
+      .upload(fileName, file, { upsert: true });
+    if (uploadError) throw uploadError;
+    const { data } = supabase.storage
+      .from("verification_documents")
+      .getPublicUrl(fileName);
+    return data?.publicUrl || null;
+  };
+
   const handleVerificationRequest = async () => {
     if (!nationalId || !bankIban)
       return alert(
         t(
           "national_iban_required",
           "الرجاء إدخال رقم الهوية ورقم الآيبان البنكي لتقديم الطلب.",
+        ),
+      );
+
+    if (!idDocumentFile || !ibanDocumentFile)
+      return alert(
+        t(
+          "verification_docs_required",
+          "الرجاء رفع صورة الهوية وشهادة الآيبان لتقديم الطلب.",
         ),
       );
 
@@ -215,29 +244,61 @@ export default function ProfileSettings({ session, onUpdate }) {
       )
     ) {
       setIsSubmitting(true);
-      const { error } = await supabase
-        .from("profiles")
-        .update({
-          national_id: nationalId,
-          bank_iban: bankIban,
-          verification_status: "pending",
-        })
-        .eq("id", session.user.id);
-
-      setIsSubmitting(false);
-
-      if (!error) {
-        setVerificationStatus("pending");
-        alert(
-          t(
-            "verification_sent_success",
-            "تم إرسال طلب التوثيق للإدارة بنجاح! سيتم مراجعته قريباً ✅",
-          ),
+      setIsVerificationUploading(true);
+      try {
+        const uploadedIdUrl = await uploadVerificationDocument(
+          idDocumentFile,
+          "id_document",
         );
-      } else {
-        alert(
-          t("send_error_prefix", "حدث خطأ أثناء الإرسال: ") + error.message,
+        const uploadedIbanUrl = await uploadVerificationDocument(
+          ibanDocumentFile,
+          "iban_document",
         );
+
+        if (!uploadedIdUrl || !uploadedIbanUrl) {
+          throw new Error(
+            t(
+              "upload_failed_msg",
+              "فشل رفع الملفات. حاول مرة أخرى.",
+            ),
+          );
+        }
+
+        const { error } = await supabase
+          .from("profiles")
+          .update({
+            national_id: nationalId,
+            id_number: nationalId,
+            bank_iban: bankIban,
+            iban: bankIban,
+            id_document_url: uploadedIdUrl,
+            iban_document_url: uploadedIbanUrl,
+            verification_status: "pending",
+          })
+          .eq("id", session.user.id);
+
+        if (!error) {
+          setVerificationStatus("pending");
+          setIdDocumentUrl(uploadedIdUrl);
+          setIbanDocumentUrl(uploadedIbanUrl);
+          alert(
+            t(
+              "verification_sent_success",
+              "تم إرسال طلب التوثيق للإدارة بنجاح! سيتم مراجعته قريباً ✅",
+            ),
+          );
+        } else {
+          alert(
+            t("send_error_prefix", "حدث خطأ أثناء الإرسال: ") + error.message,
+          );
+        }
+      } catch (err) {
+        alert(
+          t("send_error_prefix", "حدث خطأ أثناء الإرسال: ") + err.message,
+        );
+      } finally {
+        setIsSubmitting(false);
+        setIsVerificationUploading(false);
       }
     }
   };
@@ -1069,11 +1130,124 @@ export default function ProfileSettings({ session, onUpdate }) {
                   />
                 </div>
               </div>
+              {verificationStatus !== "verified" && (
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns:
+                      "repeat(auto-fit, minmax(200px, 1fr))",
+                    gap: "15px",
+                    marginBottom: "15px",
+                  }}
+                >
+                  <div>
+                    <label style={{ ...lblS, color: "#1e40af" }}>
+                      {t("id_document_label", "صورة الهوية:")}
+                    </label>
+                    <input
+                      type="file"
+                      accept="image/*,.pdf"
+                      disabled={verificationStatus === "pending"}
+                      onChange={(e) =>
+                        setIdDocumentFile(e.target.files?.[0] || null)
+                      }
+                      style={{
+                        width: "100%",
+                        padding: "8px",
+                        borderRadius: "10px",
+                        border: "1px solid #bfdbfe",
+                        fontSize: "0.85rem",
+                        backgroundColor: "#fff",
+                      }}
+                    />
+                    {idDocumentUrl && !idDocumentFile && (
+                      <a
+                        href={idDocumentUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        style={{
+                          display: "inline-block",
+                          marginTop: "6px",
+                          fontSize: "0.8rem",
+                          color: "#2563eb",
+                        }}
+                      >
+                        {t("view_current_doc", "عرض الملف الحالي")}
+                      </a>
+                    )}
+                    {idDocumentFile && (
+                      <span
+                        style={{
+                          display: "block",
+                          marginTop: "6px",
+                          fontSize: "0.8rem",
+                          color: "#059669",
+                          fontWeight: "bold",
+                        }}
+                      >
+                        ✓ {idDocumentFile.name}
+                      </span>
+                    )}
+                  </div>
+                  <div>
+                    <label style={{ ...lblS, color: "#1e40af" }}>
+                      {t(
+                        "iban_document_label",
+                        "شهادة الآيبان (IBAN Certificate):",
+                      )}
+                    </label>
+                    <input
+                      type="file"
+                      accept="image/*,.pdf"
+                      disabled={verificationStatus === "pending"}
+                      onChange={(e) =>
+                        setIbanDocumentFile(e.target.files?.[0] || null)
+                      }
+                      style={{
+                        width: "100%",
+                        padding: "8px",
+                        borderRadius: "10px",
+                        border: "1px solid #bfdbfe",
+                        fontSize: "0.85rem",
+                        backgroundColor: "#fff",
+                      }}
+                    />
+                    {ibanDocumentUrl && !ibanDocumentFile && (
+                      <a
+                        href={ibanDocumentUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        style={{
+                          display: "inline-block",
+                          marginTop: "6px",
+                          fontSize: "0.8rem",
+                          color: "#2563eb",
+                        }}
+                      >
+                        {t("view_current_doc", "عرض الملف الحالي")}
+                      </a>
+                    )}
+                    {ibanDocumentFile && (
+                      <span
+                        style={{
+                          display: "block",
+                          marginTop: "6px",
+                          fontSize: "0.8rem",
+                          color: "#059669",
+                          fontWeight: "bold",
+                        }}
+                      >
+                        ✓ {ibanDocumentFile.name}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              )}
               {verificationStatus !== "pending" && (
                 <button
                   type="button"
                   onClick={handleVerificationRequest}
-                  disabled={isSubmitting}
+                  disabled={isSubmitting || isVerificationUploading}
                   style={{
                     backgroundColor: "#2563eb",
                     color: "#fff",
@@ -1081,13 +1255,24 @@ export default function ProfileSettings({ session, onUpdate }) {
                     padding: "12px 20px",
                     borderRadius: "10px",
                     fontWeight: "900",
-                    cursor: "pointer",
+                    cursor:
+                      isSubmitting || isVerificationUploading
+                        ? "wait"
+                        : "pointer",
                     transition: "0.2s",
                   }}
                 >
-                  {isSubmitting
-                    ? t("saving_btn", "⏳ جاري الحفظ...")
-                    : t("send_verification_btn", "إرسال طلب التوثيق الآن 🚀")}
+                  {isVerificationUploading
+                    ? t(
+                        "uploading_docs_btn",
+                        "⏳ جاري رفع الملفات...",
+                      )
+                    : isSubmitting
+                      ? t("saving_btn", "⏳ جاري الحفظ...")
+                      : t(
+                          "send_verification_btn",
+                          "إرسال طلب التوثيق الآن 🚀",
+                        )}
                 </button>
               )}
             </div>

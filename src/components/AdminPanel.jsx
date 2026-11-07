@@ -45,6 +45,7 @@ export default function AdminPanel({ session }) {
   const [editingUser, setEditingUser] = useState(null);
   const [newUsername, setNewUsername] = useState("");
   const [newFullName, setNewFullName] = useState("");
+  const [verificationActionLoading, setVerificationActionLoading] = useState("");
 
   useEffect(() => {
     checkAdminAccess();
@@ -178,6 +179,30 @@ export default function AdminPanel({ session }) {
     fetchAdminData();
   };
 
+  const handleVerificationAction = async (userId, newStatus) => {
+    const confirmMsg =
+      newStatus === "verified"
+        ? t("confirm_approve_verification", "هل تريد توثيق هذا المستخدم؟")
+        : t("confirm_reject_verification", "هل تريد رفض طلب التوثيق؟");
+    if (!window.confirm(confirmMsg)) return;
+    setVerificationActionLoading(userId);
+    const { error } = await supabase
+      .from("profiles")
+      .update({ verification_status: newStatus })
+      .eq("id", userId);
+    setVerificationActionLoading("");
+    if (!error) {
+      fetchAdminData();
+      alert(
+        newStatus === "verified"
+          ? t("verification_approved_msg", "تم توثيق المستخدم بنجاح ✅")
+          : t("verification_rejected_msg", "تم رفض طلب التوثيق ❌"),
+      );
+    } else {
+      alert(t("update_error", "حدث خطأ أثناء التحديث: ") + error.message);
+    }
+  };
+
   if (loading)
     return (
       <div style={{ textAlign: "center", padding: "50px" }}>
@@ -252,6 +277,12 @@ export default function AdminPanel({ session }) {
           label={t("tab_users", "المستخدمين")}
           isActive={activeTab === "users"}
           onClick={() => setActiveTab("users")}
+        />
+        <TabButton
+          icon="🛡️"
+          label={t("tab_verification", "التوثيق المالي")}
+          isActive={activeTab === "verification"}
+          onClick={() => setActiveTab("verification")}
         />
         <TabButton
           icon="📁"
@@ -434,6 +465,214 @@ export default function AdminPanel({ session }) {
               </tbody>
             </table>
           </div>
+        </div>
+      )}
+
+      {activeTab === "verification" && (
+        <div className="animate-fade-in">
+          <h3
+            style={{
+              color: "#1e293b",
+              margin: "0 0 15px 0",
+              display: "flex",
+              alignItems: "center",
+              gap: "8px",
+            }}
+          >
+            🛡️ {t("verification_requests_title", "طلبات التوثيق المالي")}
+          </h3>
+          {(() => {
+            const pendingUsers = users.filter(
+              (u) => u.verification_status === "pending",
+            );
+            if (pendingUsers.length === 0) {
+              return (
+                <div
+                  style={{
+                    textAlign: "center",
+                    padding: "40px",
+                    backgroundColor: "#f0fdf4",
+                    borderRadius: "12px",
+                    border: "1px solid #bbf7d0",
+                    color: "#15803d",
+                    fontWeight: "bold",
+                  }}
+                >
+                  {t(
+                    "no_pending_verifications",
+                    "✅ لا توجد طلبات توثيق قيد المراجعة حالياً",
+                  )}
+                </div>
+              );
+            }
+            return (
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns:
+                    "repeat(auto-fill, minmax(340px, 1fr))",
+                  gap: "20px",
+                }}
+              >
+                {pendingUsers.map((u) => (
+                  <div
+                    key={u.id}
+                    style={{
+                      backgroundColor: "#fff",
+                      border: "1px solid #e2e8f0",
+                      borderRadius: "16px",
+                      padding: "20px",
+                      boxShadow: "0 2px 8px rgba(0,0,0,0.04)",
+                    }}
+                  >
+                    <div
+                      style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "flex-start",
+                        marginBottom: "15px",
+                      }}
+                    >
+                      <div>
+                        <strong style={{ fontSize: "1.1rem", color: "#1e293b" }}>
+                          {u.full_name || t("no_name", "بدون اسم")}
+                        </strong>
+                        <br />
+                        <span
+                          dir="ltr"
+                          style={{ color: "#7c3aed", fontWeight: "bold" }}
+                        >
+                          @{u.username || "---"}
+                        </span>
+                      </div>
+                      <span style={badgeStyle("#f59e0b")}>
+                        {t("pending_review", "⏳ قيد المراجعة")}
+                      </span>
+                    </div>
+
+                    <div
+                      style={{
+                        backgroundColor: "#f8fafc",
+                        padding: "12px",
+                        borderRadius: "10px",
+                        marginBottom: "15px",
+                        fontSize: "0.9rem",
+                      }}
+                    >
+                      <div style={{ marginBottom: "8px" }}>
+                        <strong style={{ color: "#475569" }}>
+                          {t("national_id_label", "رقم الهوية / الإقامة:")}
+                        </strong>{" "}
+                        <span dir="ltr" style={{ color: "#1e293b" }}>
+                          {u.national_id || u.id_number || "---"}
+                        </span>
+                      </div>
+                      <div>
+                        <strong style={{ color: "#475569" }}>
+                          {t("iban_label", "الآيبان (IBAN):")}
+                        </strong>{" "}
+                        <span dir="ltr" style={{ color: "#1e293b" }}>
+                          {u.bank_iban || u.iban || "---"}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div
+                      style={{
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: "8px",
+                        marginBottom: "15px",
+                      }}
+                    >
+                      {u.id_document_url && (
+                        <a
+                          href={u.id_document_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          style={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: "6px",
+                            color: "#2563eb",
+                            fontSize: "0.85rem",
+                            fontWeight: "bold",
+                            textDecoration: "none",
+                          }}
+                        >
+                          📄 {t("view_id_document", "عرض صورة الهوية")}
+                        </a>
+                      )}
+                      {u.iban_document_url && (
+                        <a
+                          href={u.iban_document_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          style={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: "6px",
+                            color: "#2563eb",
+                            fontSize: "0.85rem",
+                            fontWeight: "bold",
+                            textDecoration: "none",
+                          }}
+                        >
+                          📄 {t(
+                            "view_iban_document",
+                            "عرض شهادة الآيبان",
+                          )}
+                        </a>
+                      )}
+                    </div>
+
+                    <div style={{ display: "flex", gap: "10px" }}>
+                      <button
+                        onClick={() =>
+                          handleVerificationAction(u.id, "verified")
+                        }
+                        disabled={
+                          verificationActionLoading === u.id
+                        }
+                        style={{
+                          ...btnStyle("#10b981"),
+                          flex: 1,
+                          cursor:
+                            verificationActionLoading === u.id
+                              ? "wait"
+                              : "pointer",
+                        }}
+                      >
+                        {verificationActionLoading === u.id
+                          ? "⏳..."
+                          : t("approve_verification", "✅ توثيق")}
+                      </button>
+                      <button
+                        onClick={() =>
+                          handleVerificationAction(u.id, "rejected")
+                        }
+                        disabled={
+                          verificationActionLoading === u.id
+                        }
+                        style={{
+                          ...btnStyle("#ef4444"),
+                          flex: 1,
+                          cursor:
+                            verificationActionLoading === u.id
+                              ? "wait"
+                              : "pointer",
+                        }}
+                      >
+                        {verificationActionLoading === u.id
+                          ? "⏳..."
+                          : t("reject_verification", "❌ رفض")}
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            );
+          })()}
         </div>
       )}
 
