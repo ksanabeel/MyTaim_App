@@ -159,6 +159,10 @@ export default function AdminReports({
   const [payoutModalData, setPayoutModalData] = useState(null);
   const [isProcessingPayout, setIsProcessingPayout] = useState(false);
 
+  const [verificationFilter, setVerificationFilter] = useState("all");
+  const [verificationActionLoading, setVerificationActionLoading] = useState("");
+  const [verificationSearch, setVerificationSearch] = useState("");
+
   // ✨ حالات المراسلة الداخلية في النظام ✨
   const [activeMsgId, setActiveMsgId] = useState(null);
   const [sysMsgText, setSysMsgText] = useState("");
@@ -398,6 +402,92 @@ export default function AdminReports({
     () => getAffiliateStats(),
     [data.users, data.bookings, affiliateRate, commissionRate],
   );
+
+  const verificationUsers = data.users.filter((u) => {
+    const status = u.verification_status || "unverified";
+    const matchFilter =
+      verificationFilter === "all" || status === verificationFilter;
+    const matchSearch =
+      verificationSearch === "" ||
+      (u.full_name || "").toLowerCase().includes(verificationSearch.toLowerCase()) ||
+      (u.username || "").toLowerCase().includes(verificationSearch.toLowerCase()) ||
+      (u.phone || "").includes(verificationSearch);
+    return matchFilter && matchSearch;
+  });
+
+  const handleVerificationStatusChange = async (userId, newStatus) => {
+    const confirmMsg =
+      newStatus === "verified"
+        ? t("confirm_approve_verification", "هل تريد توثيق هذا المستخدم؟")
+        : newStatus === "rejected"
+          ? t("confirm_reject_verification", "هل تريد رفض طلب التوثيق؟")
+          : newStatus === "pending"
+            ? t("confirm_set_pending", "هل تريد إعادة الحالة إلى قيد المراجعة؟")
+            : t(
+                "confirm_revoke_verification",
+                "هل تريد إلغاء التوثيق وإعادة الحالة إلى غير موثق؟",
+              );
+    if (!window.confirm(confirmMsg)) return;
+    setVerificationActionLoading(userId);
+    try {
+      const { error } = await supabase
+        .from("profiles")
+        .update({ verification_status: newStatus })
+        .eq("id", userId);
+      if (error) throw error;
+      alert(
+        newStatus === "verified"
+          ? t("verification_approved_msg", "تم توثيق المستخدم بنجاح ✅")
+          : newStatus === "rejected"
+            ? t("verification_rejected_msg", "تم رفض طلب التوثيق ❌")
+            : t("update_success", "تم التحديث ✅"),
+      );
+      fetchStats();
+    } catch (err) {
+      alert(t("update_error", "حدث خطأ أثناء التحديث: ") + err.message);
+    } finally {
+      setVerificationActionLoading("");
+    }
+  };
+
+  const handleResetVerification = async (userId) => {
+    if (
+      !window.confirm(
+        t(
+          "confirm_reset_verification",
+          "⚠️ هل أنت متأكد من حذف جميع بيانات التوثيق لهذا المستخدم؟ سيتم مسح رقم الهوية، الآيبان، والملفات المرفوعة.",
+        ),
+      )
+    )
+      return;
+    setVerificationActionLoading(userId);
+    try {
+      const { error } = await supabase
+        .from("profiles")
+        .update({
+          national_id: null,
+          id_number: null,
+          bank_iban: null,
+          iban: null,
+          id_document_url: null,
+          iban_document_url: null,
+          verification_status: "unverified",
+        })
+        .eq("id", userId);
+      if (error) throw error;
+      alert(
+        t(
+          "verification_reset_success",
+          "تم حذف بيانات التوثيق بنجاح ✅",
+        ),
+      );
+      fetchStats();
+    } catch (err) {
+      alert(t("update_error", "حدث خطأ أثناء التحديث: ") + err.message);
+    } finally {
+      setVerificationActionLoading("");
+    }
+  };
 
   const handleExecutePayout = async () => {
     if (!payoutModalData) return;
@@ -684,6 +774,63 @@ export default function AdminReports({
               2,
             )} SAR</td></tr>`,
         )
+        .join(
+          "",
+        )}</tbody></table><script>window.onload=()=>window.print();</script></body></html>`,
+    );
+    printWindow.document.close();
+  };
+
+  const printVerificationReport = () => {
+    const statusLabels = {
+      verified: t("verified_officially", "✅ موثق رسمياً"),
+      pending: t("pending_review", "⏳ قيد المراجعة"),
+      rejected: t("rejected", "❌ مرفوض"),
+      unverified: t("unverified", "غير موثق"),
+    };
+    const printWindow = window.open("", "_blank");
+    printWindow.document.write(
+      `<html dir="${isRTL ? "rtl" : "ltr"}"><head><title>${t(
+        "print_verification_title",
+        "تقرير الحسابات الموثقة",
+      )}</title><style>body{font-family:system-ui; padding:30px; color:#1e293b;} table{width:100%; border-collapse:collapse; margin-top:20px; text-align:center;} th, td{padding:10px; border:1px solid #cbd5e1;}</style></head><body><h1 style="color:#7c3aed; border-bottom:3px solid #7c3aed; padding-bottom:10px;">${t(
+        "print_verification_heading",
+        "تقرير الحسابات الموثقة",
+      )} - ${platName}</h1><p><strong>${t(
+        "printed_count",
+        "العدد:",
+      )}</strong> ${verificationUsers.length}</p><table><thead><tr><th>${t(
+        "th_name",
+        "الاسم",
+      )}</th><th>${t(
+        "national_id_label",
+        "رقم الهوية",
+      )}</th><th>${t(
+        "iban_label",
+        "الآيبان",
+      )}</th><th>${t(
+        "th_verification_status",
+        "حالة التوثيق",
+      )}</th><th>${t(
+        "th_documents",
+        "الملفات",
+      )}</th></tr></thead><tbody>${verificationUsers
+        .map((u) => {
+          const status = u.verification_status || "unverified";
+          const idDoc = u.id_document_url
+            ? `<a href="${u.id_document_url}" target="_blank">📄 ${t(
+                "view_id_document",
+                "الهوية",
+              )}</a>`
+            : "-";
+          const ibanDoc = u.iban_document_url
+            ? `<a href="${u.iban_document_url}" target="_blank">📄 ${t(
+                "view_iban_document",
+                "الآيبان",
+              )}</a>`
+            : "-";
+          return `<tr><td>${u.full_name || "-"}<br><small dir="ltr">@${u.username || "-"}</small></td><td>${u.national_id || u.id_number || "-"}</td><td dir="ltr">${u.bank_iban || u.iban || "-"}</td><td>${statusLabels[status] || status}</td><td>${idDoc}<br>${ibanDoc}</td></tr>`;
+        })
         .join(
           "",
         )}</tbody></table><script>window.onload=()=>window.print();</script></body></html>`,
@@ -1097,6 +1244,26 @@ export default function AdminReports({
           >
             💰 {t("tab_affiliates_profits", "المسوقين والأرباح")}
           </button>
+          <button
+            onClick={() => setReportTab("verification")}
+            style={{
+              background:
+                reportTab === "verification" ? "#fff" : "transparent",
+              color: reportTab === "verification" ? "#7c3aed" : "#64748b",
+              border: "none",
+              padding: "12px 24px",
+              borderRadius: "12px",
+              fontWeight: "bold",
+              cursor: "pointer",
+              boxShadow:
+                reportTab === "verification"
+                  ? "0 4px 10px rgba(124, 58, 237, 0.1)"
+                  : "none",
+              transition: "0.2s",
+            }}
+          >
+            🛡️ {t("tab_verification_reports", "تقرير الحسابات الموثقة")}
+          </button>
         </div>
         <div>
           {reportTab === "bookings" && (
@@ -1151,6 +1318,25 @@ export default function AdminReports({
               }}
             >
               <span>🖨️</span> {t("print_affiliates_btn", "طباعة المسوقين")}
+            </button>
+          )}
+          {reportTab === "verification" && (
+            <button
+              onClick={printVerificationReport}
+              style={{
+                background: "#7c3aed",
+                color: "#fff",
+                border: "none",
+                padding: "12px 20px",
+                borderRadius: "12px",
+                cursor: "pointer",
+                fontWeight: "bold",
+                display: "flex",
+                gap: "8px",
+              }}
+            >
+              <span>🖨️</span>{" "}
+              {t("print_verification_btn", "طباعة تقرير التوثيق")}
             </button>
           )}
         </div>
@@ -2490,6 +2676,397 @@ export default function AdminReports({
                       }}
                     >
                       {t("no_users_found", "لا يوجد مستخدمين.")}
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
+
+      {reportTab === "verification" && (
+        <>
+          <div
+            style={{
+              backgroundColor: "#faf5ff",
+              padding: "18px",
+              borderRadius: "16px",
+              border: "1px solid #e9d5ff",
+              marginBottom: "20px",
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                flexWrap: "wrap",
+                gap: "10px",
+                alignItems: "center",
+                justifyContent: "space-between",
+                marginBottom: "15px",
+              }}
+            >
+              <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+                {[
+                  { key: "all", label: t("filter_all", "الكل"), color: "#64748b" },
+                  { key: "pending", label: t("pending_review", "⏳ قيد المراجعة"), color: "#f59e0b" },
+                  { key: "verified", label: t("verified_officially", "✅ موثق"), color: "#10b981" },
+                  { key: "rejected", label: t("rejected", "❌ مرفوض"), color: "#ef4444" },
+                  { key: "unverified", label: t("unverified", "غير موثق"), color: "#94a3b8" },
+                ].map((f) => (
+                  <button
+                    key={f.key}
+                    onClick={() => setVerificationFilter(f.key)}
+                    style={{
+                      background:
+                        verificationFilter === f.key
+                          ? f.color
+                          : "transparent",
+                      color: verificationFilter === f.key ? "#fff" : f.color,
+                      border: `1px solid ${f.color}40`,
+                      padding: "8px 16px",
+                      borderRadius: "10px",
+                      fontWeight: "bold",
+                      cursor: "pointer",
+                      fontSize: "0.85rem",
+                      transition: "0.2s",
+                    }}
+                  >
+                    {f.label}
+                  </button>
+                ))}
+              </div>
+              <input
+                type="text"
+                placeholder={t(
+                  "verification_search_placeholder",
+                  "بحث بالاسم، اليوزر، أو الجوال...",
+                )}
+                value={verificationSearch}
+                onChange={(e) => setVerificationSearch(e.target.value)}
+                style={{
+                  ...smInput,
+                  maxWidth: "300px",
+                }}
+              />
+            </div>
+            <div
+              style={{
+                display: "flex",
+                gap: "20px",
+                flexWrap: "wrap",
+                fontSize: "0.85rem",
+                color: "#64748b",
+              }}
+            >
+              <span>
+                {t("total_accounts", "إجمالي الحسابات:")}{" "}
+                <strong style={{ color: "#1e293b" }}>
+                  {verificationUsers.length}
+                </strong>
+              </span>
+              <span>
+                {t("pending_count", "قيد المراجعة:")}{" "}
+                <strong style={{ color: "#f59e0b" }}>
+                  {data.users.filter((u) => u.verification_status === "pending").length}
+                </strong>
+              </span>
+              <span>
+                {t("verified_count", "موثق:")}{" "}
+                <strong style={{ color: "#10b981" }}>
+                  {data.users.filter((u) => u.verification_status === "verified").length}
+                </strong>
+              </span>
+            </div>
+          </div>
+
+          <div
+            style={{
+              backgroundColor: "#fff",
+              borderRadius: "20px",
+              border: "1px solid #e2e8f0",
+              overflowX: "auto",
+              boxShadow: "0 4px 20px rgba(0,0,0,0.03)",
+            }}
+          >
+            <table
+              style={{
+                width: "100%",
+                borderCollapse: "collapse",
+                fontSize: "0.9rem",
+                textAlign: "center",
+              }}
+            >
+              <thead>
+                <tr
+                  style={{
+                    backgroundColor: "#f8fafc",
+                    borderBottom: "2px solid #e2e8f0",
+                  }}
+                >
+                  <th style={thS}>{t("th_name_username", "الاسم واليوزر")}</th>
+                  <th style={thS}>{t("national_id_label", "رقم الهوية")}</th>
+                  <th style={thS}>{t("iban_label", "الآيبان (IBAN)")}</th>
+                  <th style={thS}>{t("th_verification_status", "حالة التوثيق")}</th>
+                  <th style={thS}>{t("th_documents", "الملفات المرفوعة")}</th>
+                  <th style={thS}>{t("th_admin_actions", "إجراءات الإدارة")}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {verificationUsers.map((u) => {
+                  const status = u.verification_status || "unverified";
+                  const statusConfig = {
+                    verified: { bg: "#ecfdf5", color: "#059669", label: t("verified_officially", "✅ موثق رسمياً") },
+                    pending: { bg: "#fffbeb", color: "#b45309", label: t("pending_review", "⏳ قيد المراجعة") },
+                    rejected: { bg: "#fef2f2", color: "#dc2626", label: t("rejected", "❌ مرفوض") },
+                    unverified: { bg: "#f8fafc", color: "#94a3b8", label: t("unverified", "غير موثق") },
+                  };
+                  const cfg = statusConfig[status] || statusConfig.unverified;
+                  const isLoading = verificationActionLoading === u.id;
+                  return (
+                    <tr
+                      key={u.id}
+                      style={{
+                        borderBottom: "1px solid #f1f5f9",
+                        transition: "0.2s",
+                      }}
+                      onMouseOver={(e) =>
+                        (e.currentTarget.style.backgroundColor = "#f8fafc")
+                      }
+                      onMouseOut={(e) =>
+                        (e.currentTarget.style.backgroundColor = "transparent")
+                      }
+                    >
+                      <td style={{ ...tdS, textAlign: isRTL ? "right" : "left" }}>
+                        <div
+                          style={{
+                            fontWeight: "900",
+                            color: "#1e293b",
+                            fontSize: "1.05rem",
+                          }}
+                        >
+                          {u.full_name || t("no_name", "بدون اسم")}
+                        </div>
+                        <div
+                          style={{
+                            color: "#7c3aed",
+                            fontSize: "0.85rem",
+                            marginTop: "4px",
+                            direction: "ltr",
+                            fontWeight: "bold",
+                          }}
+                        >
+                          @{u.username || "---"}
+                        </div>
+                        <div
+                          style={{
+                            color: "#64748b",
+                            fontSize: "0.8rem",
+                            marginTop: "4px",
+                            direction: "ltr",
+                          }}
+                        >
+                          {u.phone || "-"}
+                        </div>
+                      </td>
+                      <td
+                        style={{
+                          ...tdS,
+                          direction: "ltr",
+                          fontWeight: "bold",
+                          color: "#475569",
+                        }}
+                      >
+                        {u.national_id || u.id_number || "-"}
+                      </td>
+                      <td
+                        style={{
+                          ...tdS,
+                          direction: "ltr",
+                          fontWeight: "bold",
+                          color: "#475569",
+                        }}
+                      >
+                        {u.bank_iban || u.iban || "-"}
+                      </td>
+                      <td style={tdS}>
+                        <span
+                          style={{
+                            backgroundColor: cfg.bg,
+                            color: cfg.color,
+                            padding: "6px 12px",
+                            borderRadius: "10px",
+                            fontSize: "0.8rem",
+                            fontWeight: "bold",
+                            border: `1px solid ${cfg.color}30`,
+                          }}
+                        >
+                          {cfg.label}
+                        </span>
+                      </td>
+                      <td style={tdS}>
+                        <div
+                          style={{
+                            display: "flex",
+                            flexDirection: "column",
+                            gap: "5px",
+                            alignItems: "center",
+                          }}
+                        >
+                          {u.id_document_url ? (
+                            <a
+                              href={u.id_document_url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              style={{
+                                color: "#2563eb",
+                                fontSize: "0.8rem",
+                                fontWeight: "bold",
+                                textDecoration: "none",
+                              }}
+                            >
+                              📄 {t("view_id_document", "عرض الهوية")}
+                            </a>
+                          ) : (
+                            <span style={{ color: "#cbd5e1", fontSize: "0.8rem" }}>
+                              {t("no_document", "لا يوجد")}
+                            </span>
+                          )}
+                          {u.iban_document_url ? (
+                            <a
+                              href={u.iban_document_url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              style={{
+                                color: "#2563eb",
+                                fontSize: "0.8rem",
+                                fontWeight: "bold",
+                                textDecoration: "none",
+                              }}
+                            >
+                              📄 {t("view_iban_document", "عرض الآيبان")}
+                            </a>
+                          ) : (
+                            <span style={{ color: "#cbd5e1", fontSize: "0.8rem" }}>
+                              {t("no_document", "لا يوجد")}
+                            </span>
+                          )}
+                        </div>
+                      </td>
+                      <td style={tdS}>
+                        <div
+                          style={{
+                            display: "flex",
+                            gap: "6px",
+                            justifyContent: "center",
+                            flexWrap: "wrap",
+                          }}
+                        >
+                          {status !== "verified" && (
+                            <button
+                              onClick={() =>
+                                handleVerificationStatusChange(u.id, "verified")
+                              }
+                              disabled={isLoading}
+                              title={t("approve_verification", "توثيق")}
+                              style={{
+                                background: "#d1fae5",
+                                color: "#047857",
+                                border: "1px solid #6ee7b7",
+                                borderRadius: "8px",
+                                padding: "7px 12px",
+                                cursor: isLoading ? "wait" : "pointer",
+                                fontWeight: "bold",
+                                fontSize: "0.8rem",
+                              }}
+                            >
+                              {isLoading ? "⏳" : "✅"}
+                            </button>
+                          )}
+                          {status !== "rejected" && (
+                            <button
+                              onClick={() =>
+                                handleVerificationStatusChange(u.id, "rejected")
+                              }
+                              disabled={isLoading}
+                              title={t("reject_verification", "رفض")}
+                              style={{
+                                background: "#fef2f2",
+                                color: "#dc2626",
+                                border: "1px solid #fca5a5",
+                                borderRadius: "8px",
+                                padding: "7px 12px",
+                                cursor: isLoading ? "wait" : "pointer",
+                                fontWeight: "bold",
+                                fontSize: "0.8rem",
+                              }}
+                            >
+                              {isLoading ? "⏳" : "❌"}
+                            </button>
+                          )}
+                          {status !== "unverified" && (
+                            <button
+                              onClick={() =>
+                                handleVerificationStatusChange(u.id, "unverified")
+                              }
+                              disabled={isLoading}
+                              title={t(
+                                "revoke_verification",
+                                "إلغاء التوثيق",
+                              )}
+                              style={{
+                                background: "#f1f5f9",
+                                color: "#475569",
+                                border: "1px solid #cbd5e1",
+                                borderRadius: "8px",
+                                padding: "7px 12px",
+                                cursor: isLoading ? "wait" : "pointer",
+                                fontWeight: "bold",
+                                fontSize: "0.8rem",
+                              }}
+                            >
+                              {isLoading ? "⏳" : "↩️"}
+                            </button>
+                          )}
+                          <button
+                            onClick={() => handleResetVerification(u.id)}
+                            disabled={isLoading}
+                            title={t(
+                              "reset_verification",
+                              "حذف بيانات التوثيق",
+                            )}
+                            style={{
+                              background: "#fef2f2",
+                              color: "#ef4444",
+                              border: "1px solid #fecaca",
+                              borderRadius: "8px",
+                              padding: "7px 12px",
+                              cursor: isLoading ? "wait" : "pointer",
+                              fontWeight: "bold",
+                              fontSize: "0.8rem",
+                            }}
+                          >
+                            {isLoading ? "⏳" : "🗑️"}
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+                {verificationUsers.length === 0 && (
+                  <tr>
+                    <td
+                      colSpan="6"
+                      style={{
+                        padding: "40px",
+                        color: "#94a3b8",
+                        fontSize: "1.1rem",
+                      }}
+                    >
+                      {t(
+                        "no_verification_records",
+                        "لا توجد سجلات توثيق مطابقة للفلتر الحالي.",
+                      )}
                     </td>
                   </tr>
                 )}
