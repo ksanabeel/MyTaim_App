@@ -31,8 +31,9 @@ Deno.serve(async (req: Request) => {
     const { data: providers, error } = await supabase
       .from("profiles")
       .select("username, full_name, created_at")
-      .eq("is_active", true)
-      .not("username", "is", null);
+      .or("is_active.eq.true,is_active.is.null")
+      .not("username", "is", null)
+      .neq("username", "");
 
     if (error) {
       return new Response(

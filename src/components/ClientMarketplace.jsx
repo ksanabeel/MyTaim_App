@@ -162,6 +162,27 @@ export default function ClientMarketplace({
     fetchInitialData();
   }, [username, userId]);
 
+  useEffect(() => {
+    if (username && storeProfile) {
+      const name = storeProfile.full_name || storeProfile.username;
+      document.title = `${name} — BookOnMap`;
+      const metaDesc = document.querySelector('meta[name="description"]');
+      const desc = storeProfile.bio
+        ? `${name} — ${storeProfile.bio}`.slice(0, 160)
+        : `${name} على BookOnMap — احجز الخدمة بسهولة وسرعة`;
+      if (metaDesc) {
+        metaDesc.setAttribute("content", desc);
+      } else {
+        const m = document.createElement("meta");
+        m.name = "description";
+        m.content = desc;
+        document.head.appendChild(m);
+      }
+    } else if (!username) {
+      document.title = "Book on Map";
+    }
+  }, [username, storeProfile]);
+
   const fetchMoreData = async () => {
     if (isFetchingMore || !hasMore) return;
     setIsFetchingMore(true);
@@ -1002,8 +1023,8 @@ export default function ClientMarketplace({
           <meta
             name="description"
             content={
-              storeProfile.provider_note
-                ? `${storeProfile.full_name || storeProfile.username} — ${storeProfile.provider_note}`.slice(0, 160)
+              storeProfile.bio
+                ? `${storeProfile.full_name || storeProfile.username} — ${storeProfile.bio}`.slice(0, 160)
                 : `${storeProfile.full_name || storeProfile.username} على BookOnMap — احجز الخدمة بسهولة وسرعة`
             }
           />
@@ -1015,8 +1036,8 @@ export default function ClientMarketplace({
           <meta
             property="og:description"
             content={
-              storeProfile.provider_note
-                ? storeProfile.provider_note.slice(0, 160)
+              storeProfile.bio
+                ? storeProfile.bio.slice(0, 160)
                 : `${storeProfile.full_name || storeProfile.username} على BookOnMap — احجز الخدمة بسهولة وسرعة`
             }
           />
@@ -1036,8 +1057,8 @@ export default function ClientMarketplace({
           <meta
             name="twitter:description"
             content={
-              storeProfile.provider_note
-                ? storeProfile.provider_note.slice(0, 160)
+              storeProfile.bio
+                ? storeProfile.bio.slice(0, 160)
                 : `${storeProfile.full_name || storeProfile.username} على BookOnMap`
             }
           />
@@ -1057,7 +1078,7 @@ export default function ClientMarketplace({
                 alternateName: `@${storeProfile.username}`,
                 url: `https://www.bookonmap.com/@${storeProfile.username}`,
                 image: storeProfile.avatar_url || undefined,
-                description: storeProfile.provider_note || undefined,
+                description: storeProfile.bio || undefined,
               })}
             </script>
           )}
@@ -1195,7 +1216,7 @@ export default function ClientMarketplace({
             >
               @{storeProfile.username}
             </span>
-            {storeProfile.provider_note && (
+            {storeProfile.bio && (
               <p
                 style={{
                   maxWidth: "600px",
@@ -1204,7 +1225,7 @@ export default function ClientMarketplace({
                   lineHeight: "1.5",
                 }}
               >
-                {storeProfile.provider_note}
+                {storeProfile.bio}
               </p>
             )}
           </div>
