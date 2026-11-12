@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { supabase } from "../lib/supabase";
 import { useTranslation } from "react-i18next";
 import { useParams } from "react-router-dom";
+import { Helmet } from "react-helmet-async";
 import {
   getCurrentPositionNative,
   isNativePlatform,
@@ -993,6 +994,75 @@ export default function ClientMarketplace({
 
   return (
     <div style={{ direction: isRTL ? "rtl" : "ltr" }}>
+      {isStoreMode && storeProfile && (
+        <Helmet>
+          <title>
+            {storeProfile.full_name || storeProfile.username} — BookOnMap
+          </title>
+          <meta
+            name="description"
+            content={
+              storeProfile.provider_note
+                ? `${storeProfile.full_name || storeProfile.username} — ${storeProfile.provider_note}`.slice(0, 160)
+                : `${storeProfile.full_name || storeProfile.username} على BookOnMap — احجز الخدمة بسهولة وسرعة`
+            }
+          />
+          <meta property="og:type" content="profile" />
+          <meta
+            property="og:title"
+            content={`${storeProfile.full_name || storeProfile.username} — BookOnMap`}
+          />
+          <meta
+            property="og:description"
+            content={
+              storeProfile.provider_note
+                ? storeProfile.provider_note.slice(0, 160)
+                : `${storeProfile.full_name || storeProfile.username} على BookOnMap — احجز الخدمة بسهولة وسرعة`
+            }
+          />
+          <meta
+            property="og:url"
+            content={`https://www.bookonmap.com/@${storeProfile.username}`}
+          />
+          {storeProfile.avatar_url && (
+            <meta property="og:image" content={storeProfile.avatar_url} />
+          )}
+          <meta property="og:site_name" content="BookOnMap" />
+          <meta name="twitter:card" content="summary_large_image" />
+          <meta
+            name="twitter:title"
+            content={`${storeProfile.full_name || storeProfile.username} — BookOnMap`}
+          />
+          <meta
+            name="twitter:description"
+            content={
+              storeProfile.provider_note
+                ? storeProfile.provider_note.slice(0, 160)
+                : `${storeProfile.full_name || storeProfile.username} على BookOnMap`
+            }
+          />
+          {storeProfile.avatar_url && (
+            <meta name="twitter:image" content={storeProfile.avatar_url} />
+          )}
+          <link
+            rel="canonical"
+            href={`https://www.bookonmap.com/@${storeProfile.username}`}
+          />
+          {storeProfile.full_name && (
+            <script type="application/ld+json">
+              {JSON.stringify({
+                "@context": "https://schema.org",
+                "@type": "ProfilePage",
+                name: storeProfile.full_name,
+                alternateName: `@${storeProfile.username}`,
+                url: `https://www.bookonmap.com/@${storeProfile.username}`,
+                image: storeProfile.avatar_url || undefined,
+                description: storeProfile.provider_note || undefined,
+              })}
+            </script>
+          )}
+        </Helmet>
+      )}
       <style>{`
         .hide-scrollbar::-webkit-scrollbar { display: none; }
         .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
