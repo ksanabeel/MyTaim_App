@@ -24,7 +24,7 @@
       "destination": "https://fwbccpayjjbmwpefiwqp.supabase.co/functions/v1/sitemap"
     },
     {
-      "source": "/(.*)",
+      "source": "/((?!@).*)",
       "destination": "/index.html"
     }
   ]
