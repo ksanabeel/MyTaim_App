@@ -1,13 +1,13 @@
 {
   "projectId": "71845344",
   "functions": {
+    "seo-page": {
+      "hasChanged": false,
+      "hash": "21c587ed5eba046ed9ed3c60c3a5c9b11bc29ddeae3e89c90e857874495097ef"
+    },
     "sitemap": {
       "hasChanged": false,
       "hash": "2259abba083eb8bbd1dd2a1d7238d1472d0e693a4f13097738f604cbc68be4a0"
-    },
-    "seo-page": {
-      "hasChanged": false,
-      "hash": "ce5d7a6cfba6d4e32e4951b10c325964add82a6532dd4a1148241e4df158702b"
     }
   }
 }

@@ -28,8 +28,8 @@ function escapeXml(value: string): string {
 }
 
 async function fetchIndexHtml(): Promise<string> {
-  const htmlResponse = await fetch(`${BASE_URL}/index.html`);
-  return await htmlResponse.text();
+  const resp = await fetch(`${BASE_URL}/index.html`);
+  return await resp.text();
 }
 
 Deno.serve(async (req: Request) => {
@@ -45,13 +45,17 @@ Deno.serve(async (req: Request) => {
 
   try {
     const url = new URL(req.url);
-    const path = url.searchParams.get("path") || url.pathname;
 
-    // Extract username from /@username pattern
-    const atMatch = path.match(/^\/@(.+)$/);
-    const username = atMatch ? decodeURIComponent(atMatch[1]) : null;
+    // Get username from "u" query param (passed by Vercel rewrite)
+    // or extract from path if called directly
+    let username = url.searchParams.get("u");
+    if (!username) {
+      const path = url.pathname;
+      const atMatch = path.match(/^\/@?(.+)$/);
+      username = atMatch ? decodeURIComponent(atMatch[1]) : null;
+    }
 
-    // Always fetch the base HTML first — this guarantees the SPA loads no matter what
+    // Always fetch real index.html — this has the correct hashed asset paths
     let html = await fetchIndexHtml();
 
     if (!username) {
@@ -62,14 +66,14 @@ Deno.serve(async (req: Request) => {
     const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, serviceRoleKey);
 
-    // Fetch provider profile (including id for offerings query)
+    // Fetch provider profile
     const { data: profile, error: profileError } = await supabase
       .from("profiles")
       .select("id, username, full_name, bio, avatar_url, rating")
       .eq("username", username)
       .maybeSingle();
 
-    // If provider not found, return plain HTML — SPA will handle the 404 UI
+    // If provider not found, return plain HTML — SPA handles the 404 UI
     if (profileError || !profile) {
       return new Response(html, { status: 200, headers: responseHeaders });
     }
@@ -89,6 +93,7 @@ Deno.serve(async (req: Request) => {
     const providerBio = escapeHtml(profile.bio || "");
     const providerUsername = escapeHtml(profile.username);
     const providerAvatar = profile.avatar_url || "";
+    const canonicalUrl = `${BASE_URL}/@${profile.username}`;
 
     // Build services HTML with microdata
     const servicesHtml = offerings.map((o: any) => {
@@ -110,7 +115,7 @@ Deno.serve(async (req: Request) => {
       "@type": "ProfilePage",
       name: profile.full_name || profile.username,
       alternateName: `@${profile.username}`,
-      url: `${BASE_URL}/@${profile.username}`,
+      url: canonicalUrl,
     };
     if (providerAvatar) jsonLd.image = providerAvatar;
     if (profile.bio) jsonLd.description = profile.bio;
@@ -135,7 +140,7 @@ Deno.serve(async (req: Request) => {
 
     const jsonLdScript = `<script type="application/ld+json">${JSON.stringify(jsonLd)}</script>`;
 
-    // SEO block — visible to crawlers, hidden from human users
+    // SEO block — hidden from human users but readable by search engine crawlers
     const seoBlock = `    <!-- SEO: Provider content for search engine crawlers -->
     <div id="seo-content" style="display:none" data-seo="true">
       <h1>${providerName}</h1>
@@ -157,14 +162,14 @@ ${servicesHtml}
     <meta property="og:type" content="profile" />
     <meta property="og:title" content="${escapeHtml(metaTitle)}" />
     <meta property="og:description" content="${escapeHtml(metaDesc)}" />
-    <meta property="og:url" content="${BASE_URL}/@${escapeXml(profile.username)}" />
+    <meta property="og:url" content="${escapeXml(canonicalUrl)}" />
     ${providerAvatar ? `<meta property="og:image" content="${escapeHtml(providerAvatar)}" />` : ""}
     <meta property="og:site_name" content="BookOnMap" />
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content="${escapeHtml(metaTitle)}" />
     <meta name="twitter:description" content="${escapeHtml(metaDesc)}" />
     ${providerAvatar ? `<meta name="twitter:image" content="${escapeHtml(providerAvatar)}" />` : ""}
-    <link rel="canonical" href="${BASE_URL}/@${escapeXml(profile.username)}" />`;
+    <link rel="canonical" href="${escapeXml(canonicalUrl)}" />`;
 
     // Replace existing <title> tag
     html = html.replace(/<title>[^<]*<\/title>/, enhancedHead);
