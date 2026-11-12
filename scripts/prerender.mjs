@@ -178,7 +178,7 @@ ${providerBio ? `      <p>${providerBio}</p>\n` : ""}${servicesHtml}    </div>
     html = html.replace(/<meta name="twitter:image"[^>]*>/g, "");
     html = html.replace("</body>", `${seoBlock}\n  </body>`);
 
-    const outDir = join(DIST_DIR, "@", username);
+    const outDir = join(DIST_DIR, "@" + username);
     mkdirSync(outDir, { recursive: true });
     writeFileSync(join(outDir, "index.html"), html);
     success++;
