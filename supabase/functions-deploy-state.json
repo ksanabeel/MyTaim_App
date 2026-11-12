@@ -3,7 +3,11 @@
   "functions": {
     "sitemap": {
       "hasChanged": false,
-      "hash": "8bde9989898c61f3a833e33602c26bb0e79ebb30c0e4181cc7418f2c458bb196"
+      "hash": "2259abba083eb8bbd1dd2a1d7238d1472d0e693a4f13097738f604cbc68be4a0"
+    },
+    "seo-page": {
+      "hasChanged": false,
+      "hash": "ce5d7a6cfba6d4e32e4951b10c325964add82a6532dd4a1148241e4df158702b"
     }
   }
 }

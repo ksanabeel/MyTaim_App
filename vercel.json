@@ -24,6 +24,10 @@
       "destination": "https://fwbccpayjjbmwpefiwqp.supabase.co/functions/v1/sitemap"
     },
     {
+      "source": "/@:username*",
+      "destination": "https://fwbccpayjjbmwpefiwqp.supabase.co/functions/v1/seo-page?path=/@:username"
+    },
+    {
       "source": "/(.*)",
       "destination": "/index.html"
     }

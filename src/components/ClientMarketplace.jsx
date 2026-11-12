@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useLayoutEffect, useRef, useCallback } from "react";
 import { supabase } from "../lib/supabase";
 import { useTranslation } from "react-i18next";
 import { useParams } from "react-router-dom";
@@ -162,23 +162,26 @@ export default function ClientMarketplace({
     fetchInitialData();
   }, [username, userId]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (username && storeProfile) {
       const name = storeProfile.full_name || storeProfile.username;
-      document.title = `${name} — BookOnMap`;
-      const metaDesc = document.querySelector('meta[name="description"]');
+      const newTitle = `${name} — BookOnMap`;
+      if (document.title !== newTitle) {
+        document.title = newTitle;
+      }
       const desc = storeProfile.bio
         ? `${name} — ${storeProfile.bio}`.slice(0, 160)
         : `${name} على BookOnMap — احجز الخدمة بسهولة وسرعة`;
+      let metaDesc = document.querySelector('meta[name="description"]');
       if (metaDesc) {
         metaDesc.setAttribute("content", desc);
       } else {
-        const m = document.createElement("meta");
-        m.name = "description";
-        m.content = desc;
-        document.head.appendChild(m);
+        metaDesc = document.createElement("meta");
+        metaDesc.setAttribute("name", "description");
+        metaDesc.setAttribute("content", desc);
+        document.head.appendChild(metaDesc);
       }
-    } else if (!username) {
+    } else if (!username && document.title !== "Book on Map") {
       document.title = "Book on Map";
     }
   }, [username, storeProfile]);
