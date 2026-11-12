@@ -1,5 +1,2 @@
 [functions.sitemap]
 verify_jwt = false
-
-[functions.seo-page]
-verify_jwt = false
