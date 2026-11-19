@@ -34,6 +34,7 @@ import { useTranslation } from "react-i18next";
 import { HelmetProvider } from "react-helmet-async";
 import { Capacitor } from "@capacitor/core";
 import { copyToClipboard } from "./lib/native";
+import { initPushNotifications, updateAppBadge, clearAppBadge } from "./lib/push";
 import {
   padS,
   thS,
@@ -353,6 +354,7 @@ function MainAppContent() {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
       fetchAllData(session?.user?.id);
+      if (session?.user?.id) initPushNotifications();
     });
     const {
       data: { subscription },
@@ -370,6 +372,11 @@ function MainAppContent() {
 
       setSession(session);
       fetchAllData(session?.user?.id);
+      if (session?.user?.id) {
+        initPushNotifications();
+      } else {
+        clearAppBadge();
+      }
     });
     return () => subscription.unsubscribe();
   }, [fetchAllData, navigate]);
@@ -753,6 +760,10 @@ function MainAppContent() {
     );
 
   const unreadNotifsCount = notifications.filter((n) => !n.is_read).length;
+
+  useEffect(() => {
+    updateAppBadge(unreadNotifsCount);
+  }, [unreadNotifsCount]);
 
   return (
     <div
