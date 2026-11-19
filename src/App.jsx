@@ -438,6 +438,12 @@ function MainAppContent() {
     };
   }, []);
 
+  const unreadNotifsCount = notifications.filter((n) => !n.is_read).length;
+
+  useEffect(() => {
+    updateAppBadge(unreadNotifsCount);
+  }, [unreadNotifsCount]);
+
   const handleLogout = async () => {
     await supabase.auth.signOut();
     window.location.reload();
@@ -758,12 +764,6 @@ function MainAppContent() {
         acc + calculateFinancials(b, commissionRate).platformCommission,
       0,
     );
-
-  const unreadNotifsCount = notifications.filter((n) => !n.is_read).length;
-
-  useEffect(() => {
-    updateAppBadge(unreadNotifsCount);
-  }, [unreadNotifsCount]);
 
   return (
     <div
